@@ -91,6 +91,7 @@
 <div id="app">
 <button id="muteBtn" style="position:fixed; top:12px; right:12px; z-index:1000; background:var(--bg-mid); color:var(--text); border:none; border-radius:8px; padding:6px 12px; font-size:0.95em; line-height:1.4; cursor:pointer;">🔊</button>
 <button id="pauseBtn" class="hidden" style="position:fixed; top:12px; right:76px; z-index:1000; background:var(--bg-mid); color:var(--text); border:none; border-radius:8px; padding:6px 12px; font-size:0.95em; line-height:1.4; cursor:pointer;">⏸️ Pause</button>
+<button id="fullscreenBtn" style="position:fixed; top:12px; right:170px; z-index:1000; background:var(--bg-mid); color:var(--text); border:none; border-radius:8px; padding:6px 12px; font-size:0.95em; line-height:1.4; cursor:pointer;">⛶ Fullscreen</button>
 <div id="versionLabel" style="position:fixed; bottom:10px; left:10px; z-index:1000; background:rgba(27,38,59,0.85); border:1px solid #444; color:#aab; border-radius:6px; padding:4px 10px; font-size:0.75em;">Alpha v1.0</div>
 
   <!-- START SCREEN -->
@@ -495,6 +496,44 @@ document.getElementById('muteBtn').addEventListener('click', () => {
   initAudio();
   toggleMute();
 });
+
+/* =========================================================
+   FULLSCREEN TOGGLE
+   Uses the standard Fullscreen API on the whole page. Note: if this
+   game is embedded in an iframe (e.g. a Google Sites embed) and that
+   iframe doesn't have the "allowfullscreen" permission set, the
+   browser will reject the request — this is a browser security rule,
+   not something fixable from inside the game itself. We catch that
+   case and let the player know, rather than failing silently.
+   ========================================================= */
+function isFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+function toggleFullscreen() {
+  if (!isFullscreen()) {
+    const el = document.documentElement;
+    const request = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (!request) return;
+    const result = request.call(el);
+    if (result && result.catch) {
+      result.catch(() => {
+        alert("Fullscreen isn't available here — this can happen when the game is embedded inside a Google Site. Try opening the game's direct link in its own tab instead.");
+      });
+    }
+  } else {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if (exit) exit.call(document);
+  }
+}
+
+function updateFullscreenBtnLabel() {
+  document.getElementById('fullscreenBtn').textContent = isFullscreen() ? '⛶ Exit Fullscreen' : '⛶ Fullscreen';
+}
+
+document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', updateFullscreenBtnLabel);
+document.addEventListener('webkitfullscreenchange', updateFullscreenBtnLabel);
 
 /* =========================================================
    STATE
