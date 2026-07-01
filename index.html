@@ -139,7 +139,7 @@
     <div class="card" style="text-align:left; line-height:1.7;">
       <p><b>🎯 The goal:</b> answer each question correctly before it's too late.</p>
       <p><b>🛢️ Click Mode:</b> barrels fall, each showing a different answer. Click the barrel that answers the clue at the top.</p>
-      <p><b>⌨️ Typed Mode:</b> sometimes a "?" mystery barrel falls instead — type your answer in the box and press <b>Go!</b> (or hit Enter). You can try again if you get it wrong, as long as the barrel hasn't landed yet.</p>
+      <p><b>⌨️ Typed Mode:</b> sometimes a "?" mystery barrel falls instead — type your answer in the box and press <b>Go!</b> (or hit Enter). Get it wrong, or run out of time, and the correct answer is shown briefly before moving on.</p>
       <p><b>☠️ Wrong answer:</b> costs a life — the barrel turns to poison.</p>
       <p><b>🎯 Barrel reaches your hero:</b> also costs a life — don't let one slip past uncaught!</p>
       <p><b>❤️ Lives:</b> you start with 3. Game over when they run out.</p>
@@ -239,7 +239,7 @@ const TIERS = [
       { affix: "don't", meaning: "short form of \"do not\"", distractors: ["belongs to someone named Don", "more than one \"do\""] },
       { affix: "can't", meaning: "short form of \"cannot\"", distractors: ["belongs to someone", "more than one \"can\""] },
       { affix: "it's raining", meaning: "short form of \"it is\"", distractors: ["belonging to \"it\"", "more than one \"it\""] },
-      { affix: "its tail (the cat)", meaning: "belonging to \"it\"", distractors: ["short form of \"it is\"", "more than one tail"] },
+      { affix: "its tail (the cat)", meaning: "because it shows belonging (possession), not a contraction", distractors: ["because it's a contraction of two words", "because possessive nouns are never written with an apostrophe"], questionOverride: "Why is there <u>no</u> apostrophe in <b>\"its\"</b> — \"the cat wagged its tail\"?" },
       { affix: "I'll see you later", meaning: "short form of \"I will\"", distractors: ["belonging to \"I\"", "more than one \"I\""] },
       { affix: "we're happy", meaning: "short form of \"we are\"", distractors: ["belonging to \"we\"", "more than one \"we\""] },
       { affix: "the children's toys", meaning: "belongs to the children", distractors: ["belongs to one child", "a shortened form of two words"] },
@@ -980,7 +980,9 @@ function buildQuestion(tierIndex, item, roundInputMode) {
   if (tier.format === 'oneway') {
     // Typed answers aren't offered for one-way tiers — meanings here are full
     // phrases (e.g. "n sound (g is silent)"), not fair or fun to type exactly.
-    const questionHTML = `${tier.questionPrefix} <b>"${highlightPattern(item.affix)}"</b>?`;
+    // A few items (e.g. "its" having no apostrophe) don't fit the tier's
+    // standard question template at all, so they can supply their own.
+    const questionHTML = item.questionOverride || `${tier.questionPrefix} <b>"${highlightPattern(item.affix)}"</b>?`;
     const distractors = shuffleArray(item.distractors).slice(0, 2);
     const options = shuffleArray([
       { text: item.meaning, correct: true },
@@ -1202,9 +1204,9 @@ function handleTypedSubmit() {
     resolveShot(barrel); // reuses the exact same correct-answer logic as clicking
     hideTypeAnswerBar();
   } else {
-    // Wrong guess: costs a life (same "wrong answer = poison" rule as clicking
-    // a wrong barrel), but the mystery barrel keeps falling — the player can
-    // try again until it's right, it reaches the hero, or lives run out.
+    // Wrong guess: costs a life and reveals the correct answer immediately —
+    // any wrong answer now ends the round (no more silent retries), matching
+    // what happens when the barrel reaches the hero uncaught.
     state.accuracyTotal++;
     state.lives--;
     state.screenShake = 220;
@@ -1212,11 +1214,20 @@ function handleTypedSubmit() {
     updateHud();
     playSound('wrong');
     input.value = '';
-    input.classList.remove('shake-error');
-    void input.offsetWidth; // restart animation
-    input.classList.add('shake-error');
+
+    const displayAnswer = state.currentClue.affix.replace(/[\u2013\u2014-]/g, '').trim();
+    clueBarEl.innerHTML = `Not quite — the answer was <b>"${displayAnswer}"</b>`;
+    hideTypeAnswerBar();
+    barrel.alive = false; // round over — no further guesses this round
+
     if (state.lives <= 0) {
-      setTimeout(() => runWhenUnpaused(endGame), 600);
+      // Game over: handle this transition ourselves (with the same reveal
+      // delay) rather than letting the generic clue-advance watcher also
+      // fire and race with it.
+      state._clueAdvanceScheduled = true;
+      setTimeout(() => runWhenUnpaused(endGame), 1800);
+    } else {
+      state.pendingRevealActive = true; // generic watcher advances to the next question after the reveal
     }
   }
 }
