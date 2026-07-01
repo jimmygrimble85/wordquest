@@ -1,0 +1,1827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WordQuest: Barrel Blitz</title>
+<style>
+  :root {
+    --bg-dark: #0d1b2a;
+    --bg-mid: #1b263b;
+    --accent: #ffb703;
+    --accent2: #fb8500;
+    --good: #06d6a0;
+    --bad: #ef476f;
+    --text: #f1faee;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg-dark);
+    color: var(--text);
+    font-family: 'Segoe UI', Verdana, sans-serif;
+    overflow: hidden;
+  }
+  #app {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: flex-start; height: 100%; width: 100%;
+    padding-top: 4px; overflow-y: auto; box-sizing: border-box;
+  }
+  .screen {
+    width: min(900px, 96vw);
+    display: flex; flex-direction: column; align-items: center;
+    gap: 16px;
+  }
+  h1 { font-size: 2.2em; margin: 0; color: var(--accent); text-shadow: 2px 2px 0 var(--accent2); }
+  p.sub { margin: 0; opacity: 0.85; text-align: center; max-width: 600px; }
+  .card {
+    background: var(--bg-mid);
+    border-radius: 12px;
+    padding: 24px;
+    width: 100%;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  label { display: block; margin-bottom: 6px; font-weight: bold; }
+  select, button {
+    font-size: 1em; padding: 10px 16px; border-radius: 8px; border: none;
+    font-family: inherit; cursor: pointer;
+  }
+  select { width: 100%; margin-bottom: 16px; background: #0d1b2a; color: var(--text); border: 1px solid #444; }
+  button.primary {
+    background: var(--accent); color: #1b263b; font-weight: bold;
+    width: 100%; font-size: 1.1em; padding: 14px;
+    transition: transform 0.1s ease;
+  }
+  button.primary:hover { transform: scale(1.02); background: var(--accent2); color: white; }
+  button.secondary {
+    background: transparent; color: var(--text); border: 1px solid #666;
+  }
+  #gameCanvas { display: block; background: linear-gradient(#0d1b2a, #1b263b); border-radius: 12px; touch-action: none; }
+  #hud {
+    display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap;
+    gap: 8px; width: 100%; padding: 8px 90px 8px 4px; font-size: 0.95em;
+  }
+  #hud span { background: var(--bg-mid); padding: 6px 12px; border-radius: 8px; }
+  #clueBar {
+    width: 100%; text-align: center; font-size: 1.3em; padding: 10px;
+    background: var(--bg-mid); border-radius: 8px; min-height: 1.4em;
+  }
+  #clueBar b { color: var(--accent); }
+  .hidden { display: none !important; }
+  #feedback {
+    position: absolute; font-weight: bold; font-size: 1.4em; pointer-events: none;
+    animation: floatUp 0.8s ease forwards;
+  }
+  @keyframes floatUp {
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-40px); }
+  }
+  @keyframes inputShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-8px); }
+    40%, 80% { transform: translateX(8px); }
+  }
+  .shake-error { animation: inputShake 0.35s ease; border-color: var(--bad) !important; }
+  #summary { text-align: center; }
+  #summary .stat { font-size: 1.1em; margin: 6px 0; }
+  #summary .big { font-size: 2.4em; color: var(--accent); font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="app">
+<button id="muteBtn" style="position:fixed; top:12px; right:12px; z-index:1000; background:var(--bg-mid); color:var(--text); border:none; border-radius:8px; padding:6px 12px; font-size:0.95em; line-height:1.4; cursor:pointer;">🔊</button>
+<button id="pauseBtn" class="hidden" style="position:fixed; top:12px; right:76px; z-index:1000; background:var(--bg-mid); color:var(--text); border:none; border-radius:8px; padding:6px 12px; font-size:0.95em; line-height:1.4; cursor:pointer;">⏸️ Pause</button>
+<div id="versionLabel" style="position:fixed; bottom:10px; left:10px; z-index:1000; background:rgba(27,38,59,0.85); border:1px solid #444; color:#aab; border-radius:6px; padding:4px 10px; font-size:0.75em;">Alpha v1.0</div>
+
+  <!-- START SCREEN -->
+  <div class="screen" id="startScreen">
+    <h1>🛢️ WordQuest: Barrel Blitz</h1>
+    <p class="sub">Shoot the correct barrel before it lands. Wrong barrel = poison, lose a life. If a barrel actually reaches your hero without being shot, that costs a life too — barrels that fall past him are safe misses.</p>
+    <button class="secondary" id="howToPlayBtn" style="padding:10px 18px; margin-bottom:4px;">❓ How to Play</button>
+
+    <div class="card">
+      <label>Not sure where to start?</label>
+      <button class="primary" id="questBtn">🧭 Start Quest (find my level)</button>
+      <p class="sub" style="margin-top:8px; font-size:0.85em;">A quick round of questions figures out the best level for you, then you jump straight in.</p>
+    </div>
+
+    <div class="card">
+      <label for="levelSelect">Or pick a level yourself</label>
+      <select id="levelSelect"></select>
+      <div id="personalBestDisplay" class="sub" style="text-align:center; margin-bottom:10px; font-size:0.85em;">No attempts yet</div>
+      <button class="secondary" id="startBtn" style="width:100%; padding:14px; font-size:1.05em;">Start This Level</button>
+    </div>
+  </div>
+
+  <!-- HOW TO PLAY SCREEN -->
+  <div class="screen hidden" id="howToPlayScreen">
+    <h1>❓ How to Play</h1>
+    <div class="card" style="text-align:left; line-height:1.7;">
+      <p><b>🎯 The goal:</b> answer each question correctly before it's too late.</p>
+      <p><b>🛢️ Click Mode:</b> barrels fall, each showing a different answer. Click the barrel that answers the clue at the top.</p>
+      <p><b>⌨️ Typed Mode:</b> sometimes a "?" mystery barrel falls instead — type your answer in the box and press <b>Go!</b> (or hit Enter). You can try again if you get it wrong, as long as the barrel hasn't landed yet.</p>
+      <p><b>☠️ Wrong answer:</b> costs a life — the barrel turns to poison.</p>
+      <p><b>🎯 Barrel reaches your hero:</b> also costs a life — don't let one slip past uncaught!</p>
+      <p><b>❤️ Lives:</b> you start with 3. Game over when they run out.</p>
+      <p><b>🏆 Level Complete:</b> get 10 correct answers to clear a level and move on.</p>
+      <p><b>🧭 Not sure where to start?</b> Try Quest mode from the main menu — a quick round of questions finds the right level for you.</p>
+      <p><b>⏸️ Need a break?</b> Use the Pause button anytime during a level.</p>
+      <button class="primary" id="howToPlayBackBtn" style="width:100%; margin-top:10px;">Got it, let's play!</button>
+    </div>
+  </div>
+
+  <!-- QUEST (PLACEMENT QUIZ) SCREEN -->
+  <div class="screen hidden" id="questScreen">
+    <h1>🧭 Quest: Finding Your Level</h1>
+    <div id="questProgress" class="sub">Question 1</div>
+    <div class="card">
+      <div id="questClue" style="font-size:1.3em; text-align:center; margin-bottom:20px; min-height:2.6em;"></div>
+      <div id="questOptions" style="display:flex; flex-direction:column; gap:10px;"></div>
+    </div>
+  </div>
+
+  <!-- QUEST RESULT SCREEN -->
+  <div class="screen hidden" id="questResultScreen">
+    <h1>🎯 You're placed at...</h1>
+    <div class="card" style="text-align:center;">
+      <div class="big" id="questResultLevel" style="font-size:2em; color:var(--accent); font-weight:bold; margin-bottom:8px;">Level 1</div>
+      <div id="questResultName" class="sub" style="margin-bottom:20px;"></div>
+      <button class="primary" id="questContinueBtn">Let's Go!</button>
+    </div>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div class="screen hidden" id="gameScreen" style="position: relative;">
+    <div id="hud">
+      <span id="scoreDisplay">Score: 0</span>
+      <span id="livesDisplay">❤️❤️❤️</span>
+      <span id="tierDisplay">Level 1</span>
+      <span id="progressDisplay">0 / 10</span>
+    </div>
+    <div id="clueBar">...</div>
+    <div id="typeAnswerBar" class="hidden" style="width:100%; display:flex; gap:8px;">
+      <input id="typeAnswerInput" type="text" autocomplete="off" placeholder="Type your answer..."
+        style="flex:1; padding:12px 14px; border-radius:8px; border:2px solid #444; background:#0d1b2a; color:var(--text); font-size:1.05em;">
+      <button class="primary" id="typeAnswerSubmit" style="padding:12px 20px;">Go!</button>
+    </div>
+    <div style="position:relative;">
+      <canvas id="gameCanvas" width="860" height="480"></canvas>
+      <div id="pauseOverlay" class="hidden" style="position:absolute; inset:0; background:rgba(13,27,42,0.92); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+        <h1 style="margin:0;">⏸️ Paused</h1>
+        <button class="primary" id="resumeBtn" style="width:200px;">Resume</button>
+        <button class="secondary" id="quitToMenuBtn" style="width:200px; padding:12px;">Quit to Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEVEL COMPLETE SCREEN -->
+  <div class="screen hidden" id="levelCompleteScreen">
+    <h1>🎉 Level Complete!</h1>
+    <div class="card" style="text-align:center;">
+      <div class="big" id="levelCompleteName" style="font-size:1.6em; color:var(--accent); font-weight:bold; margin-bottom:12px;">Level 1: Apostrophe Academy</div>
+      <div class="stat" id="levelCompleteScore">Score: 0</div>
+      <div class="stat" id="levelCompleteAccuracy" style="margin-bottom:20px;">Accuracy: 0%</div>
+      <button class="primary" id="nextLevelBtn" style="margin-bottom:10px;">Next Level →</button>
+      <button class="secondary" id="levelCompleteMenuBtn" style="width:100%; padding:12px;">Back to Menu</button>
+    </div>
+  </div>
+
+  <!-- GAME OVER SCREEN -->
+  <div class="screen hidden" id="overScreen">
+    <h1>Game Over</h1>
+    <div class="card" id="summary">
+      <div class="stat">You reached</div>
+      <div class="big" id="finalTier">Level 1</div>
+      <div class="stat" id="finalScore">Score: 0</div>
+      <div class="stat" id="finalAccuracy">Accuracy: 0%</div>
+    </div>
+    <button class="primary" id="retryBtn">Play Again</button>
+  </div>
+
+</div>
+
+<script>
+/* =========================================================
+   CONTENT BANK
+   (Prototype: Tier 1 only. Structure supports adding
+   Tier 2, 2b, 3, 4 the same way later.)
+   ========================================================= */
+const TIERS = [
+  {
+    name: "Level 1: Apostrophe Academy",
+    short: "Level 1",
+    format: 'oneway',
+    questionPrefix: "What does the apostrophe show in",
+    startSpeedMultiplier: 1.0,
+    items: [
+      { affix: "the dog's ball", meaning: "belongs to one dog", distractors: ["belongs to more than one dog", "a shortened form of two words"] },
+      { affix: "the dogs' ball", meaning: "belongs to more than one dog", distractors: ["belongs to one dog", "a shortened form of two words"] },
+      { affix: "don't", meaning: "short form of \"do not\"", distractors: ["belongs to someone named Don", "more than one \"do\""] },
+      { affix: "can't", meaning: "short form of \"cannot\"", distractors: ["belongs to someone", "more than one \"can\""] },
+      { affix: "it's raining", meaning: "short form of \"it is\"", distractors: ["belonging to \"it\"", "more than one \"it\""] },
+      { affix: "its tail (the cat)", meaning: "belonging to \"it\"", distractors: ["short form of \"it is\"", "more than one tail"] },
+      { affix: "I'll see you later", meaning: "short form of \"I will\"", distractors: ["belonging to \"I\"", "more than one \"I\""] },
+      { affix: "we're happy", meaning: "short form of \"we are\"", distractors: ["belonging to \"we\"", "more than one \"we\""] },
+      { affix: "the children's toys", meaning: "belongs to the children", distractors: ["belongs to one child", "a shortened form of two words"] },
+      { affix: "shouldn't", meaning: "short form of \"should not\"", distractors: ["belongs to someone", "more than one \"should\""] },
+      { affix: "the boys' team", meaning: "belongs to more than one boy", distractors: ["belongs to one boy", "a shortened form of two words"] },
+      { affix: "wouldn't", meaning: "short form of \"would not\"", distractors: ["belongs to someone", "more than one \"would\""] },
+      { affix: "the cat's whiskers", meaning: "belongs to one cat", distractors: ["belongs to more than one cat", "a shortened form of two words"] }
+    ]
+  },
+  {
+    name: "Level 2: Word Starters",
+    short: "Level 2",
+    startSpeedMultiplier: 1.0,
+    items: [
+      { affix: "re–", type: "prefix", meaning: "again / back", distractors: ["not", "before", "many"] },
+      { affix: "un–", type: "prefix", meaning: "not / opposite of", distractors: ["again", "very", "with"] },
+      { affix: "pre–", type: "prefix", meaning: "before", distractors: ["after", "against", "under"] },
+      { affix: "dis–", type: "prefix", meaning: "not / opposite / away", distractors: ["with", "again", "over"] },
+      { affix: "–ful", type: "suffix", meaning: "full of", distractors: ["without", "before", "against"] },
+      { affix: "–less", type: "suffix", meaning: "without", distractors: ["full of", "very", "again"] },
+      { affix: "tele–", type: "root", meaning: "far / distant", distractors: ["near", "fast", "small"] },
+      { affix: "auto–", type: "root", meaning: "self", distractors: ["other", "machine", "far"] },
+      { affix: "bio–", type: "root", meaning: "life", distractors: ["death", "earth", "study"] },
+      { affix: "sub–", type: "prefix", meaning: "under / below", distractors: ["above", "beyond", "around"] },
+      { affix: "mis–", type: "prefix", meaning: "wrongly / badly", distractors: ["again", "before", "without"] },
+      { affix: "–ment", type: "suffix", meaning: "the result or action of", distractors: ["the state of being", "the place of", "the person who"] }
+    ]
+  },
+  {
+    name: "Level 3: Sound Tricksters",
+    short: "Level 3",
+    format: 'oneway',
+    questionPrefix: "What sound do the underlined letters make in",
+    startSpeedMultiplier: 0.9,
+    items: [
+      { affix: "ei in reign", meaning: "long a sound", distractors: ["long e sound", "short i sound", "silent"] },
+      { affix: "ei in ceiling", meaning: "long e sound", distractors: ["long a sound", "short e sound", "silent"] },
+      { affix: "ou in enough", meaning: "short u sound", distractors: ["long o sound", "\"ow\" sound", "\"oo\" sound"] },
+      { affix: "a in was", meaning: "short o sound", distractors: ["short a sound", "long a sound", "short u sound"] },
+      { affix: "a in quad", meaning: "short o sound", distractors: ["short a sound", "long a sound", "short u sound"] },
+      { affix: "gh in enough", meaning: "f sound", distractors: ["g sound", "silent", "k sound"] },
+      { affix: "ch in chef", meaning: "sh sound", distractors: ["ch sound (as in \"chip\")", "k sound", "h sound"] },
+      { affix: "ch in school", meaning: "k sound", distractors: ["ch sound (as in \"chip\")", "sh sound", "silent"] },
+      { affix: "ch in chair", meaning: "ch sound", distractors: ["k sound", "sh sound", "silent"] },
+      { affix: "a in want", meaning: "short o sound", distractors: ["short a sound", "long a sound", "short u sound"] },
+      { affix: "a in squad", meaning: "short o sound", distractors: ["short a sound", "long a sound", "short u sound"] },
+      { affix: "ch in machine", meaning: "sh sound", distractors: ["ch sound (as in \"chip\")", "k sound", "h sound"] }
+    ]
+  },
+  {
+    name: "Level 4: Prefix Power",
+    short: "Level 4",
+    startSpeedMultiplier: 1.0,
+    items: [
+      { affix: "inter–", type: "prefix", meaning: "between / among", distractors: ["within", "against", "before"] },
+      { affix: "over–", type: "prefix", meaning: "too much / above", distractors: ["under", "again", "away"] },
+      { affix: "circum–", type: "prefix", meaning: "around", distractors: ["through", "between", "under"] },
+      { affix: "contra–", type: "prefix", meaning: "against", distractors: ["with", "before", "around"] },
+      { affix: "ambi–", type: "prefix", meaning: "both", distractors: ["none", "one", "many"] },
+      { affix: "ante–", type: "prefix", meaning: "before", distractors: ["after", "against", "around"] },
+      { affix: "anti–", type: "prefix", meaning: "against / opposite", distractors: ["for", "before", "between"] },
+      { affix: "–able", type: "suffix", meaning: "capable of / able to be", distractors: ["full of", "without", "against"] },
+      { affix: "–ible", type: "suffix", meaning: "capable of / able to be", distractors: ["impossible", "never", "beyond"] },
+      { affix: "–ure", type: "suffix", meaning: "the act/result of, or state of", distractors: ["the place of", "the start of", "the opposite of"] },
+      { affix: "–ous", type: "suffix", meaning: "full of / having the qualities of", distractors: ["without", "capable of", "the act of"] },
+      { affix: "–ive", type: "suffix", meaning: "having the nature of / tending to", distractors: ["without", "the state of", "the place of"] }
+    ]
+  },
+  {
+    name: "Level 5: Silent Letter Detectives",
+    short: "Level 5",
+    format: 'oneway',
+    questionPrefix: "What sound do these letters make in",
+    startSpeedMultiplier: 0.85,
+    items: [
+      { affix: "gn in sign", meaning: "n sound (g is silent)", distractors: ["g sound", "\"ng\" sound", "no sound at all"] },
+      { affix: "gn in gnome", meaning: "n sound (g is silent)", distractors: ["g sound", "\"ng\" sound", "no sound at all"] },
+      { affix: "gh in ghost", meaning: "g sound (h is silent)", distractors: ["f sound", "no sound at all", "h sound"] },
+      { affix: "ps in psychology", meaning: "s sound (p is silent)", distractors: ["p sound", "\"ps\" sound", "no sound at all"] },
+      { affix: "pn in pneumonia", meaning: "n sound (p is silent)", distractors: ["p sound", "\"pn\" sound", "no sound at all"] },
+      { affix: "mn in autumn", meaning: "m sound (n is silent)", distractors: ["n sound", "\"mn\" sound", "no sound at all"] },
+      { affix: "mn in column", meaning: "m sound (n is silent)", distractors: ["n sound", "\"mn\" sound", "no sound at all"] },
+      { affix: "rh in rhythm", meaning: "r sound (h is silent)", distractors: ["h sound", "\"rh\" sound", "no sound at all"] },
+      { affix: "pt in receipt", meaning: "t sound (p is silent)", distractors: ["p sound", "\"pt\" sound", "no sound at all"] },
+      { affix: "gh in spaghetti", meaning: "g sound (h is silent)", distractors: ["f sound", "no sound at all", "h sound"] },
+      { affix: "rh in rhyme", meaning: "r sound (h is silent)", distractors: ["h sound", "\"rh\" sound", "no sound at all"] },
+      { affix: "gn in campaign", meaning: "n sound (g is silent)", distractors: ["g sound", "\"ng\" sound", "no sound at all"] }
+    ]
+  },
+  {
+    name: "Level 6: Number Ninjas",
+    short: "Level 6",
+    startSpeedMultiplier: 0.9,
+    items: [
+      { affix: "uni–", type: "root", meaning: "one", distractors: ["many", "none", "half"] },
+      { affix: "bi–", type: "root", meaning: "two", distractors: ["three", "one", "many"] },
+      { affix: "tri–", type: "root", meaning: "three", distractors: ["two", "four", "many"] },
+      { affix: "quad–", type: "root", meaning: "four", distractors: ["three", "five", "ten"] },
+      { affix: "pent–", type: "root", meaning: "five", distractors: ["four", "six", "hundred"] },
+      { affix: "hex–", type: "root", meaning: "six", distractors: ["five", "seven", "eight"] },
+      { affix: "sept–", type: "root", meaning: "seven", distractors: ["six", "eight", "hundred"] },
+      { affix: "oct–", type: "root", meaning: "eight", distractors: ["seven", "nine", "ten"] },
+      { affix: "non–", type: "root", meaning: "nine", distractors: ["eight", "ten", "hundred"] },
+      { affix: "dec–", type: "root", meaning: "ten", distractors: ["nine", "hundred", "thousand"] },
+      { affix: "cent–", type: "root", meaning: "hundred", distractors: ["ten", "thousand", "million"] },
+      { affix: "milli–", type: "root", meaning: "thousand", distractors: ["hundred", "ten", "billion"] },
+      { affix: "semi–", type: "root", meaning: "half", distractors: ["double", "quarter", "all"] },
+      { affix: "poly–", type: "root", meaning: "many", distractors: ["one", "few", "all"] }
+    ]
+  },
+  {
+    name: "Level 7: Shape-Shifters",
+    short: "Level 7",
+    startSpeedMultiplier: 0.7,
+    items: [
+      { affix: "in–", type: "prefix", meaning: "not", distractors: ["with", "before", "again"] },
+      { affix: "im–", type: "prefix", meaning: "not (before b/m/p)", distractors: ["with", "beyond", "again"] },
+      { affix: "il–", type: "prefix", meaning: "not (before l)", distractors: ["with", "before", "beyond"] },
+      { affix: "ir–", type: "prefix", meaning: "not (before r)", distractors: ["with", "beyond", "again"] },
+      { affix: "con–", type: "prefix", meaning: "with / together", distractors: ["apart", "before", "against"] },
+      { affix: "col–", type: "prefix", meaning: "with / together (before l)", distractors: ["apart", "beyond", "under"] },
+      { affix: "com–", type: "prefix", meaning: "with / together (before b/m/p)", distractors: ["apart", "against", "beyond"] },
+      { affix: "cor–", type: "prefix", meaning: "with / together (before r)", distractors: ["apart", "before", "beyond"] }
+    ]
+  },
+  {
+    name: "Level 8: Suffix Spelling Shifters",
+    short: "Level 8",
+    format: 'oneway',
+    questionPrefix: "What happens when you add a suffix here:",
+    startSpeedMultiplier: 0.8,
+    items: [
+      { affix: "leaf → leaves", meaning: "the f changes to v before the suffix", distractors: ["the f stays the same", "the f doubles", "the word loses the f entirely"] },
+      { affix: "thief → thieves", meaning: "the f changes to v before the suffix", distractors: ["the f stays the same", "the f doubles", "the word loses the f entirely"] },
+      { affix: "mischief → mischievous", meaning: "the f changes to v before the suffix", distractors: ["the f stays the same", "the f doubles", "the spelling doesn't change"] },
+      { affix: "exclaim → exclamation", meaning: "the long \"a\" sound becomes a short \"a\" sound", distractors: ["it stays a long \"a\" sound", "it becomes a long \"e\" sound", "the vowel is dropped entirely"] },
+      { affix: "explain → explanation", meaning: "the long \"a\" sound becomes a short \"a\" sound", distractors: ["it stays a long \"a\" sound", "it becomes a long \"e\" sound", "the vowel is dropped entirely"] },
+      { affix: "declare → declaration", meaning: "the long \"a\" sound becomes a short \"a\" sound", distractors: ["it stays a long \"a\" sound", "it becomes a long \"e\" sound", "the vowel is dropped entirely"] },
+      { affix: "wife → wives", meaning: "the f changes to v before the suffix", distractors: ["the f stays the same", "the f doubles", "the word loses the f entirely"] },
+      { affix: "knife → knives", meaning: "the f changes to v before the suffix", distractors: ["the f stays the same", "the f doubles", "the word loses the f entirely"] },
+      { affix: "wolf → wolves", meaning: "the f changes to v before the suffix", distractors: ["the f stays the same", "the f doubles", "the word loses the f entirely"] },
+      { affix: "half → halves", meaning: "the f changes to v before the suffix", distractors: ["the f stays the same", "the f doubles", "the word loses the f entirely"] },
+      { affix: "invite → invitation", meaning: "the long \"i\" sound becomes a short \"i\" sound", distractors: ["it stays a long \"i\" sound", "it becomes a long \"e\" sound", "the vowel is dropped entirely"] },
+      { affix: "combine → combination", meaning: "the long \"i\" sound becomes a short \"i\" sound", distractors: ["it stays a long \"i\" sound", "it becomes a long \"e\" sound", "the vowel is dropped entirely"] }
+    ]
+  },
+  {
+    name: "Level 9: Master Shape-Shifters",
+    short: "Level 9",
+    startSpeedMultiplier: 0.65,
+    items: [
+      { affix: "in–", type: "prefix", meaning: "not", distractors: ["with / together", "beyond", "again"] },
+      { affix: "im–", type: "prefix", meaning: "not (before b/m/p)", distractors: ["with / together", "beyond", "again"] },
+      { affix: "il–", type: "prefix", meaning: "not (before l)", distractors: ["with / together", "before", "beyond"] },
+      { affix: "ir–", type: "prefix", meaning: "not (before r)", distractors: ["with / together", "beyond", "again"] },
+      { affix: "con–", type: "prefix", meaning: "with / together", distractors: ["not", "against", "before"] },
+      { affix: "col–", type: "prefix", meaning: "with / together (before l)", distractors: ["not", "apart", "under"] },
+      { affix: "com–", type: "prefix", meaning: "with / together (before b/m/p)", distractors: ["not", "against", "beyond"] },
+      { affix: "cor–", type: "prefix", meaning: "with / together (before r)", distractors: ["not", "apart", "beyond"] }
+    ]
+  }
+];
+
+/* =========================================================
+   AUDIO ENGINE
+   Fully synthesized via Web Audio API — no external sound files,
+   so the game stays a single self-contained HTML file. Browsers
+   require a user gesture before audio can play, so the context is
+   created lazily on first click (Start Quest / Start Level / mute).
+   ========================================================= */
+let audioCtx = null;
+let masterGain = null;
+let muted = false;
+let musicPlaying = false;
+let musicTimer = null;
+let musicStepIndex = 0;
+
+// Two distinct patterns — odd-numbered levels get one melody, even-numbered
+// levels get another, so the music itself signals "new type of level" a bit.
+const MUSIC_LOOPS = {
+  odd: [261.63, 329.63, 392.00, 329.63, 440.00, 392.00, 329.63, 293.66],  // C-E-G-E-A-G-E-D
+  even: [293.66, 349.23, 440.00, 349.23, 392.00, 349.23, 293.66, 246.94] // D-F-A-F-G-F-D-B
+};
+let activeMusicLoop = MUSIC_LOOPS.odd;
+
+function initAudio() {
+  if (audioCtx) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return;
+  }
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return; // very old browser — fail silently, game still works
+  audioCtx = new AudioContextClass();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = muted ? 0 : 1;
+  masterGain.connect(audioCtx.destination);
+  startBackgroundMusic();
+}
+
+function toggleMute() {
+  muted = !muted;
+  document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
+  if (masterGain) masterGain.gain.value = muted ? 0 : 1;
+}
+
+function playTone(freq, duration, type, gainPeak, startOffset, freqEnd) {
+  if (!audioCtx || muted) return;
+  const t0 = audioCtx.currentTime + (startOffset || 0);
+  const osc = audioCtx.createOscillator();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  if (freqEnd) osc.frequency.exponentialRampToValueAtTime(Math.max(freqEnd, 1), t0 + duration);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(gainPeak, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+  osc.connect(g);
+  g.connect(masterGain);
+  osc.start(t0);
+  osc.stop(t0 + duration + 0.02);
+}
+
+function playSound(type) {
+  initAudio();
+  if (!audioCtx || muted) return;
+  switch (type) {
+    case 'shoot':
+      playTone(900, 0.09, 'square', 0.07, 0, 300);
+      break;
+    case 'correct':
+      playTone(523.25, 0.12, 'sine', 0.16, 0);
+      playTone(659.25, 0.12, 'sine', 0.16, 0.09);
+      playTone(783.99, 0.18, 'sine', 0.18, 0.18);
+      break;
+    case 'wrong':
+      playTone(220, 0.18, 'sawtooth', 0.13, 0, 90);
+      break;
+    case 'hit':
+      playTone(140, 0.22, 'square', 0.17, 0, 60);
+      playTone(90, 0.25, 'triangle', 0.11, 0.02, 40);
+      break;
+    case 'gameover':
+      [392.00, 349.23, 293.66, 220.00].forEach((f, i) => playTone(f, 0.35, 'triangle', 0.15, i * 0.28));
+      break;
+    case 'levelComplete':
+      [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50].forEach((f, i) => playTone(f, 0.16, 'triangle', 0.17, i * 0.12));
+      break;
+  }
+}
+
+function startBackgroundMusic() {
+  if (musicPlaying) return;
+  musicPlaying = true;
+  musicStepIndex = 0;
+  scheduleNextMusicNote();
+}
+
+function setMusicForLevel(tierIndex) {
+  const levelNumber = tierIndex + 1; // Level 1, 2, 3... (1-indexed, matches what students see)
+  activeMusicLoop = (levelNumber % 2 === 1) ? MUSIC_LOOPS.odd : MUSIC_LOOPS.even;
+  musicStepIndex = 0; // restart cleanly at the new pattern's first note
+}
+
+function scheduleNextMusicNote() {
+  if (!musicPlaying) return;
+  const freq = activeMusicLoop[musicStepIndex % activeMusicLoop.length];
+  playTone(freq, 0.35, 'triangle', 0.03); // deliberately very soft — background, not foreground
+  musicStepIndex++;
+  musicTimer = setTimeout(scheduleNextMusicNote, 420);
+}
+
+document.getElementById('muteBtn').addEventListener('click', () => {
+  initAudio();
+  toggleMute();
+});
+
+/* =========================================================
+   STATE
+   ========================================================= */
+let state = {
+  tierIndex: 0,
+  score: 0,
+  lives: 3,
+  accuracyHits: 0,
+  accuracyTotal: 0,
+  currentClue: null,
+  barrels: [],
+  running: false,
+  paused: false,
+  spawnTimer: 0,
+  spawnInterval: 2200, // ms between barrel spawns, decreases over time
+  fallSpeedBase: 0.85,  // px/ms baseline — dialed back from 1.15, was too punishing
+  elapsedMs: 0,
+  lastFrameTime: 0,
+  usedItemsThisTier: [],
+  thrower: { armSwing: 0 },
+  bullets: [],
+  splashes: [],
+  sparkles: [],
+  screenShake: 0,
+  shooterFlash: 0
+};
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const clueBarEl = document.getElementById('clueBar');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const tierDisplay = document.getElementById('tierDisplay');
+const livesDisplay = document.getElementById('livesDisplay');
+
+/* =========================================================
+   SCREEN MANAGEMENT
+   ========================================================= */
+function showScreen(id) {
+  ['startScreen', 'howToPlayScreen', 'questScreen', 'questResultScreen', 'gameScreen', 'levelCompleteScreen', 'overScreen'].forEach(s => {
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+  document.getElementById('pauseBtn').classList.toggle('hidden', id !== 'gameScreen');
+  if (id === 'startScreen') updatePersonalBestDisplay();
+}
+
+function populateLevelSelect() {
+  const select = document.getElementById('levelSelect');
+  select.innerHTML = '';
+  TIERS.forEach((tier, idx) => {
+    const opt = document.createElement('option');
+    opt.value = idx;
+    opt.textContent = tier.name;
+    select.appendChild(opt);
+  });
+}
+populateLevelSelect();
+
+/* =========================================================
+   PERSONAL BEST (localStorage only — stays on this device,
+   nothing sent anywhere, same approach as the intro/onboarding flag)
+   ========================================================= */
+function getBestScores() {
+  try {
+    return JSON.parse(localStorage.getItem('wordquest_bestScores') || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+function getBestScoreForLevel(levelIdx) {
+  const scores = getBestScores();
+  return scores[levelIdx] || 0;
+}
+
+function saveBestScoreIfHigher(levelIdx, score) {
+  const scores = getBestScores();
+  if (!scores[levelIdx] || score > scores[levelIdx]) {
+    scores[levelIdx] = score;
+    localStorage.setItem('wordquest_bestScores', JSON.stringify(scores));
+  }
+}
+
+function updatePersonalBestDisplay() {
+  const idx = parseInt(document.getElementById('levelSelect').value, 10);
+  const best = getBestScoreForLevel(idx);
+  document.getElementById('personalBestDisplay').textContent =
+    best > 0 ? `🏅 Personal best: ${best}` : 'No attempts yet';
+}
+document.getElementById('levelSelect').addEventListener('change', updatePersonalBestDisplay);
+updatePersonalBestDisplay();
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  initAudio();
+  state.tierIndex = parseInt(document.getElementById('levelSelect').value, 10);
+  startGame();
+});
+document.getElementById('retryBtn').addEventListener('click', () => {
+  showScreen('startScreen');
+});
+
+document.getElementById('howToPlayBtn').addEventListener('click', () => {
+  showScreen('howToPlayScreen');
+});
+document.getElementById('howToPlayBackBtn').addEventListener('click', () => {
+  localStorage.setItem('wordquest_seen_intro', '1');
+  showScreen('startScreen');
+});
+
+// First-time visitors see the How to Play screen automatically. Uses
+// localStorage only — stays entirely on this device, nothing sent anywhere.
+if (!localStorage.getItem('wordquest_seen_intro')) {
+  showScreen('howToPlayScreen');
+}
+
+/* =========================================================
+   PAUSE / RESUME / QUIT
+   ========================================================= */
+document.getElementById('pauseBtn').addEventListener('click', () => {
+  if (!state.running || state.paused) return;
+  state.paused = true;
+  document.getElementById('pauseOverlay').classList.remove('hidden');
+});
+
+document.getElementById('resumeBtn').addEventListener('click', () => {
+  if (!state.paused) return;
+  state.paused = false;
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  state.lastFrameTime = performance.now(); // avoids a huge dt jump after the pause
+  requestAnimationFrame(gameLoop);
+});
+
+document.getElementById('quitToMenuBtn').addEventListener('click', () => {
+  state.running = false;
+  state.paused = false;
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  hideTypeAnswerBar();
+  showScreen('startScreen');
+});
+
+/* =========================================================
+   QUEST MODE (placement quiz)
+   ========================================================= */
+const QUEST_QUESTIONS_PER_LEVEL = 2;
+
+let quest = {
+  levelIdx: 0,
+  questionInLevel: 0,
+  correctInLevel: 0,
+  usedItemsThisLevel: [],
+  currentAnswer: null // the correct option text, for checking clicks
+};
+
+document.getElementById('questBtn').addEventListener('click', () => {
+  initAudio();
+  startQuest();
+});
+document.getElementById('questContinueBtn').addEventListener('click', () => {
+  state.tierIndex = quest.placedLevelIdx;
+  startGame();
+});
+
+function startQuest() {
+  quest = {
+    levelIdx: 0,
+    questionInLevel: 0,
+    correctInLevel: 0,
+    usedItemsThisLevel: [],
+    currentAnswer: null,
+    placedLevelIdx: 0
+  };
+  showScreen('questScreen');
+  askQuestQuestion();
+}
+
+function askQuestQuestion() {
+  const tier = TIERS[quest.levelIdx];
+  let pool = tier.items.filter(i => !quest.usedItemsThisLevel.includes(i.affix));
+  if (pool.length === 0) pool = tier.items; // shouldn't happen with only 2 asked per level, but safe fallback
+  const item = pool[Math.floor(Math.random() * pool.length)];
+  quest.usedItemsThisLevel.push(item.affix);
+
+  const { questionHTML, options } = buildQuestion(quest.levelIdx, item);
+
+  document.getElementById('questProgress').textContent =
+    `${tier.short} — Question ${quest.questionInLevel + 1} of ${QUEST_QUESTIONS_PER_LEVEL}`;
+  document.getElementById('questClue').innerHTML = questionHTML;
+
+  const optionsContainer = document.getElementById('questOptions');
+  optionsContainer.innerHTML = '';
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'secondary';
+    btn.style.cssText = 'width:100%; padding:14px; font-size:1.05em; text-align:left;';
+    btn.textContent = opt.text;
+    btn.addEventListener('click', () => handleQuestAnswer(opt.correct, btn, optionsContainer));
+    optionsContainer.appendChild(btn);
+  });
+}
+
+function handleQuestAnswer(wasCorrect, clickedBtn, optionsContainer) {
+  // disable all buttons and show feedback colours
+  Array.from(optionsContainer.children).forEach(btn => btn.disabled = true);
+  clickedBtn.style.background = wasCorrect ? 'var(--good)' : 'var(--bad)';
+  clickedBtn.style.color = 'white';
+
+  if (wasCorrect) quest.correctInLevel++;
+  quest.questionInLevel++;
+
+  setTimeout(() => {
+    if (quest.questionInLevel < QUEST_QUESTIONS_PER_LEVEL) {
+      askQuestQuestion();
+      return;
+    }
+    evaluateQuestLevel();
+  }, 700);
+}
+
+function evaluateQuestLevel() {
+  const maxLevelIdx = TIERS.length - 1;
+
+  if (quest.correctInLevel === QUEST_QUESTIONS_PER_LEVEL) {
+    // Aced this level
+    if (quest.levelIdx >= maxLevelIdx) {
+      finishQuest(quest.levelIdx); // topped out at the hardest level
+    } else {
+      quest.levelIdx++;
+      quest.questionInLevel = 0;
+      quest.correctInLevel = 0;
+      quest.usedItemsThisLevel = [];
+      askQuestQuestion();
+    }
+  } else if (quest.correctInLevel >= 1) {
+    // Partial success — place here
+    finishQuest(quest.levelIdx);
+  } else {
+    // Got both wrong — drop back a level (floor at Level 1)
+    finishQuest(Math.max(quest.levelIdx - 1, 0));
+  }
+}
+
+function finishQuest(placedLevelIdx) {
+  quest.placedLevelIdx = placedLevelIdx;
+  const tier = TIERS[placedLevelIdx];
+  document.getElementById('questResultLevel').textContent = tier.short;
+  document.getElementById('questResultName').textContent = tier.name.split(': ')[1] || '';
+  showScreen('questResultScreen');
+}
+
+/* =========================================================
+   GAME SETUP
+   ========================================================= */
+const LEVEL_COMPLETE_TARGET = 10; // correct answers needed to clear a level
+
+function startGame() {
+  setMusicForLevel(state.tierIndex);
+  state.score = 0;
+  state.lives = 3;
+  state.accuracyHits = 0;
+  state.accuracyTotal = 0;
+  state.correctThisLevel = 0;
+  state.levelComplete = false;
+  state.barrels = [];
+  state.bullets = [];
+  state.splashes = [];
+  state.sparkles = [];
+  state.screenShake = 0;
+  state.shooterFlash = 0;
+  state._clueAdvanceScheduled = false;
+  state.roundInputMode = 'click';
+  state.currentMysteryBarrel = null;
+  state.pendingRevealActive = false;
+  hideTypeAnswerBar();
+  state.spawnTimer = 0;
+  state.spawnInterval = 2200;
+  const levelSpeedMult = TIERS[state.tierIndex].startSpeedMultiplier || 1.0;
+  state.fallSpeedBase = 0.85 * levelSpeedMult;
+  state.rampMultiplier = levelSpeedMult; // harder levels also ramp up more gently
+  state.elapsedMs = 0;
+  state.running = true;
+  state.paused = false;
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  updateHud();
+  showScreen('gameScreen');
+  pickNewClue();
+  state.lastFrameTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function updateHud() {
+  scoreDisplay.textContent = `Score: ${state.score}`;
+  tierDisplay.textContent = TIERS[state.tierIndex].short;
+  document.getElementById('progressDisplay').textContent = `${state.correctThisLevel} / ${LEVEL_COMPLETE_TARGET}`;
+  livesDisplay.textContent = '❤️'.repeat(Math.max(state.lives, 0)) + '🖤'.repeat(3 - Math.max(state.lives, 0));
+}
+
+/* =========================================================
+   CLUE / BARREL LOGIC
+   ========================================================= */
+const TYPED_ROUND_CHANCE = 0.35; // roughly 1-in-3 rounds on eligible levels become typed
+
+function pickNewClue() {
+  const tier = TIERS[state.tierIndex];
+  // avoid immediate repeats
+  let pool = tier.items.filter(i => !state.usedItemsThisTier.includes(i.affix));
+  if (pool.length === 0) {
+    state.usedItemsThisTier = [];
+    pool = tier.items;
+  }
+  const item = pool[Math.floor(Math.random() * pool.length)];
+  state.usedItemsThisTier.push(item.affix);
+  state.currentClue = item;
+  state._clueAdvanceScheduled = false;
+
+  // Typed rounds only offered on 'twoway' tiers — one-way tiers (apostrophes,
+  // spelling patterns) have long phrase answers that aren't fair to type.
+  state.roundInputMode = (tier.format !== 'oneway' && Math.random() < TYPED_ROUND_CHANCE)
+    ? 'type' : 'click';
+
+  const { questionHTML, options } = buildQuestion(state.tierIndex, item, state.roundInputMode);
+  clueBarEl.innerHTML = questionHTML;
+
+  if (state.roundInputMode === 'type') {
+    spawnMysteryBarrel(item);
+    showTypeAnswerBar();
+  } else {
+    hideTypeAnswerBar();
+    spawnBarrelsForClue(options);
+  }
+}
+
+function showTypeAnswerBar() {
+  const bar = document.getElementById('typeAnswerBar');
+  bar.classList.remove('hidden');
+  const input = document.getElementById('typeAnswerInput');
+  input.value = '';
+  input.classList.remove('shake-error');
+  input.focus();
+}
+
+function hideTypeAnswerBar() {
+  document.getElementById('typeAnswerBar').classList.add('hidden');
+}
+
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* =========================================================
+   SHARED QUESTION BUILDER
+   Used by both the main game (barrels) and Quest mode (buttons)
+   so the two never drift out of sync.
+
+   Two tier formats:
+   - 'twoway' (default): existing prefix/suffix/root style —
+     question can go affix→meaning OR meaning→affix, randomly.
+   - 'oneway': apostrophes / spelling-pattern style — always
+     asks about a given example, answer is always the meaning/
+     explanation. No reverse direction (doesn't make sense to
+     ask "which word means X" for a spelling pattern).
+   ========================================================= */
+function buildQuestion(tierIndex, item, roundInputMode) {
+  const tier = TIERS[tierIndex];
+
+  if (tier.format === 'oneway') {
+    // Typed answers aren't offered for one-way tiers — meanings here are full
+    // phrases (e.g. "n sound (g is silent)"), not fair or fun to type exactly.
+    const questionHTML = `${tier.questionPrefix} <b>"${item.affix}"</b>?`;
+    const distractors = shuffleArray(item.distractors).slice(0, 2);
+    const options = shuffleArray([
+      { text: item.meaning, correct: true },
+      ...distractors.map(d => ({ text: d, correct: false }))
+    ]);
+    return { questionHTML, options };
+  }
+
+  // 'twoway' — existing morphology format
+  const typeLabel = item.type === 'suffix' ? 'suffix' : (item.type === 'root' ? 'root' : 'prefix');
+
+  if (roundInputMode === 'type') {
+    // Typed round: always asks meaning→affix direction, since the affix
+    // (e.g. "re–") is short and clean enough to type fairly.
+    const questionHTML = `Type the ${typeLabel} that means <b>"${item.meaning}"</b>`;
+    return { questionHTML, options: null };
+  }
+
+  const mode = Math.random() < 0.5 ? 'affixToMeaning' : 'meaningToAffix';
+  let questionHTML, options;
+  if (mode === 'affixToMeaning') {
+    questionHTML = `Which ${typeLabel} means <b>"${item.meaning}"</b>?`;
+    const others = shuffleArray(tier.items.filter(i => i.affix !== item.affix)).slice(0, 2);
+    options = shuffleArray([
+      { text: item.affix, correct: true },
+      ...others.map(o => ({ text: o.affix, correct: false }))
+    ]);
+  } else {
+    questionHTML = `What does <b>"${item.affix}"</b> mean?`;
+    const distractors = shuffleArray(item.distractors).slice(0, 2);
+    options = shuffleArray([
+      { text: item.meaning, correct: true },
+      ...distractors.map(d => ({ text: d, correct: false }))
+    ]);
+  }
+  return { questionHTML, options };
+}
+
+function spawnBarrelsForClue(options) {
+  const numLanes = options.length;
+  const laneWidth = canvas.width / numLanes;
+  const throwerX = canvas.width / 2;
+  const throwerY = 34;
+
+  // Two INDEPENDENT permutations, each round:
+  //  - laneOrder decides which physical lane (left/centre/right) each barrel lands in
+  //  - throwOrder decides the sequence they're thrown in (who goes 1st/2nd/3rd)
+  // Both are permutations of 0..numLanes-1, so every lane is used exactly once
+  // and the throwing sequence varies independently of lane position.
+  const laneOrder = shuffleArray([...Array(numLanes).keys()]);
+  const throwOrder = shuffleArray([...Array(numLanes).keys()]);
+
+  options.forEach((opt, idx) => {
+    const lane = laneOrder[idx];
+    const throwSlot = throwOrder[idx];
+    state.barrels.push({
+      targetX: laneWidth * lane + laneWidth / 2, // final lane position (unique per barrel)
+      fallStartY: 120 + Math.random() * 30,      // height where the falling phase kicks in
+      x: throwerX,
+      y: throwerY,
+      text: opt.text,
+      correct: opt.correct,
+      radius: 46,
+      speed: state.fallSpeedBase + Math.random() * 0.15,
+      fallMultiplier: 1,
+      alive: true,
+      popTimer: 0,
+      wobble: Math.random() * Math.PI * 2, // for falling wobble animation
+      phase: 'waiting',       // waiting -> throwing -> falling
+      throwElapsed: 0,
+      throwDuration: 420 + Math.random() * 180,
+      launchDelay: throwSlot * (400 + Math.random() * 280) // staggered throw timing, independent of lane
+    });
+  });
+}
+
+function spawnMysteryBarrel(item) {
+  // A single unlabelled barrel for typed rounds — the player types the answer
+  // instead of clicking, so there's nothing to read on the barrel itself.
+  const throwerX = canvas.width / 2;
+  const throwerY = 34;
+  const barrel = {
+    targetX: canvas.width / 2, // falls straight down the middle
+    fallStartY: 120 + Math.random() * 30,
+    x: throwerX,
+    y: throwerY,
+    text: '?',
+    correct: true, // the mystery barrel IS the answer — typing it correctly "shoots" it
+    isMystery: true,
+    radius: 46,
+    speed: state.fallSpeedBase + Math.random() * 0.1,
+    fallMultiplier: 0.72, // typed rounds fall slower — typing takes longer than clicking
+    alive: true,
+    popTimer: 0,
+    wobble: Math.random() * Math.PI * 2,
+    phase: 'waiting',
+    throwElapsed: 0,
+    throwDuration: 420 + Math.random() * 180,
+    launchDelay: 0
+  };
+  state.barrels.push(barrel);
+  state.currentMysteryBarrel = barrel;
+}
+
+/* =========================================================
+   INPUT (click / tap on barrel)
+   ========================================================= */
+canvas.addEventListener('click', handleShoot);
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  handleShoot(touch);
+}, { passive: false });
+
+function handleShoot(evt) {
+  if (!state.running || state.paused || state.roundInputMode === 'type') return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (evt.clientX - rect.left) * scaleX;
+  const y = (evt.clientY - rect.top) * scaleY;
+
+  for (const barrel of state.barrels) {
+    if (!barrel.alive || barrel.popTimer > 0 || barrel.phase === 'waiting') continue;
+    const dx = x - barrel.x;
+    const dy = y - barrel.y;
+    if (Math.sqrt(dx * dx + dy * dy) <= barrel.radius) {
+      // fire a bullet from shooter sprite toward the barrel
+      const shooterX = canvas.width / 2;
+      const shooterY = canvas.height - 28;
+      state.bullets.push({
+        x: shooterX, y: shooterY,
+        targetX: barrel.x, targetY: barrel.y,
+        progress: 0,
+        target: barrel
+      });
+      playSound('shoot');
+      break;
+    }
+  }
+}
+
+function resolveShot(barrel) {
+  state.accuracyTotal++;
+  barrel.popTimer = 420; // longer, more visible pop animation
+  if (barrel.correct) {
+    state.accuracyHits++;
+    state.score += 10;
+    state.correctThisLevel++;
+    barrel.result = 'good';
+    state.sparkles.push({ x: barrel.x, y: barrel.y, life: 500, particles: makeSparkleParticles() });
+    // clear remaining barrels for this clue immediately; the correct barrel
+    // keeps animating (popTimer) — the unified watcher advances once it's gone
+    state.barrels.forEach(b => { if (b !== barrel) b.alive = false; });
+    updateHud();
+    playSound('correct');
+    if (state.correctThisLevel >= LEVEL_COMPLETE_TARGET) {
+      state.levelComplete = true;
+    }
+  } else {
+    barrel.result = 'bad';
+    state.lives--;
+    state.screenShake = 260;
+    state.splashes.push({ x: barrel.x, y: barrel.y, life: 750, particles: makeSplashParticles(), color: '#9d4edd' });
+    updateHud();
+    playSound('wrong');
+    if (state.lives <= 0) {
+      setTimeout(() => runWhenUnpaused(endGame), 600);
+    }
+  }
+}
+
+function loseLifeToShooter(barrel) {
+  // A barrel reached the shooter without being shot: always costs a life,
+  // whether it was the correct barrel (missed opportunity) or a wrong one (got hit).
+  state.lives--;
+  state.screenShake = 300;
+  state.shooterFlash = 400; // brief red tint on the hero sprite
+  state.splashes.push({ x: canvas.width / 2, y: canvas.height - 30, life: 800, maxLife: 800, particles: makeSplashParticles(), color: '#ef233c' });
+  updateHud();
+  playSound('hit');
+
+  // Typed rounds: if the mystery barrel got away uncaught, briefly show what
+  // the answer would have been rather than just moving straight on.
+  if (barrel.isMystery && state.currentClue) {
+    const displayAnswer = state.currentClue.affix.replace(/[\u2013\u2014-]/g, '').trim();
+    clueBarEl.innerHTML = `The answer was <b>"${displayAnswer}"</b>`;
+    hideTypeAnswerBar();
+    state.pendingRevealActive = true;
+  }
+
+  if (state.lives <= 0) {
+    setTimeout(() => runWhenUnpaused(endGame), 600);
+  }
+}
+
+/* =========================================================
+   TYPED ANSWER HANDLING
+   ========================================================= */
+function normalizeAnswer(str) {
+  // Case-insensitive, and strips dash characters (en/em/hyphen) entirely so
+  // "re" / "re-" / "re–" all count as the same answer — the dash is a
+  // notational convention, not something worth failing a student over.
+  return str.toLowerCase().replace(/[\u2013\u2014-]/g, '').trim();
+}
+
+function handleTypedSubmit() {
+  if (!state.running || state.paused || state.roundInputMode !== 'type') return;
+  const input = document.getElementById('typeAnswerInput');
+  const barrel = state.currentMysteryBarrel;
+  if (!barrel || !barrel.alive || barrel.popTimer > 0) return; // already resolved, ignore stray submits
+
+  const guess = normalizeAnswer(input.value);
+  if (guess.length === 0) return; // ignore empty submissions
+
+  const correctAnswer = normalizeAnswer(state.currentClue.affix);
+
+  if (guess === correctAnswer) {
+    resolveShot(barrel); // reuses the exact same correct-answer logic as clicking
+    hideTypeAnswerBar();
+  } else {
+    // Wrong guess: costs a life (same "wrong answer = poison" rule as clicking
+    // a wrong barrel), but the mystery barrel keeps falling — the player can
+    // try again until it's right, it reaches the hero, or lives run out.
+    state.accuracyTotal++;
+    state.lives--;
+    state.screenShake = 220;
+    state.splashes.push({ x: barrel.x, y: barrel.y, life: 750, maxLife: 750, particles: makeSplashParticles(), color: '#9d4edd' });
+    updateHud();
+    playSound('wrong');
+    input.value = '';
+    input.classList.remove('shake-error');
+    void input.offsetWidth; // restart animation
+    input.classList.add('shake-error');
+    if (state.lives <= 0) {
+      setTimeout(() => runWhenUnpaused(endGame), 600);
+    }
+  }
+}
+
+document.getElementById('typeAnswerSubmit').addEventListener('click', handleTypedSubmit);
+document.getElementById('typeAnswerInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleTypedSubmit();
+});
+
+function makeSparkleParticles() {
+  const particles = [];
+  for (let i = 0; i < 14; i++) {
+    const angle = (Math.PI * 2 * i) / 14;
+    particles.push({
+      vx: Math.cos(angle) * (2 + Math.random() * 1.5),
+      vy: Math.sin(angle) * (2 + Math.random() * 1.5),
+      x: 0, y: 0
+    });
+  }
+  return particles;
+}
+
+function makeSplashParticles() {
+  const particles = [];
+  for (let i = 0; i < 10; i++) {
+    const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.3;
+    particles.push({
+      vx: Math.cos(angle) * (1.5 + Math.random()),
+      vy: Math.sin(angle) * (1.5 + Math.random()) - 1,
+      x: 0, y: 0
+    });
+  }
+  return particles;
+}
+
+/* =========================================================
+   PAUSE HANDLING
+   Delayed transitions (clue advance, reveals, game over) are scheduled
+   with real-world setTimeout calls, which don't know or care that the
+   game is paused. runWhenUnpaused() makes them wait politely instead
+   of silently firing in the background or getting lost entirely.
+   ========================================================= */
+function runWhenUnpaused(fn) {
+  if (!state.running) return; // game has genuinely ended, abandon
+  if (state.paused) {
+    setTimeout(() => runWhenUnpaused(fn), 200);
+    return;
+  }
+  fn();
+}
+
+/* =========================================================
+   MAIN LOOP
+   ========================================================= */
+function gameLoop(now) {
+  if (!state.running || state.paused) return; // paused: simply stop scheduling frames until resumed
+  const dt = now - state.lastFrameTime;
+  state.lastFrameTime = now;
+  state.elapsedMs += dt;
+
+  // Difficulty ramp: every 18s, speed up slightly (softer than before)
+  const rampSteps = Math.floor(state.elapsedMs / 18000);
+
+  // Shooter hitbox (fixed at bottom center)
+  const shooterX = canvas.width / 2;
+  const shooterHitRadius = 34; // only barrels actually overlapping the hero count
+
+  // Update barrels
+  for (const barrel of state.barrels) {
+    if (barrel.phase === 'waiting') {
+      barrel.launchDelay -= dt;
+      if (barrel.launchDelay <= 0) {
+        barrel.phase = 'throwing';
+        barrel.throwElapsed = 0;
+        state.thrower.armSwing = 260; // trigger throw animation
+      } else {
+        continue;
+      }
+    }
+    if (barrel.popTimer > 0) {
+      barrel.popTimer -= dt;
+      if (barrel.popTimer <= 0) barrel.alive = false;
+      continue;
+    }
+    if (!barrel.alive) continue;
+
+    if (barrel.phase === 'throwing') {
+      barrel.throwElapsed += dt;
+      const t = Math.min(barrel.throwElapsed / barrel.throwDuration, 1);
+      const eased = t; // linear horizontal pace reads clearer than eased for a thrown arc
+      const arcHeight = 90; // how high the barrel rises mid-throw
+      const throwerX = canvas.width / 2;
+      const throwerY = 34;
+      barrel.x = throwerX + (barrel.targetX - throwerX) * eased;
+      barrel.y = throwerY + (barrel.fallStartY - throwerY) * eased - arcHeight * Math.sin(Math.PI * eased);
+      barrel.wobble += dt * 0.01;
+      if (t >= 1) {
+        barrel.phase = 'falling';
+        barrel.x = barrel.targetX;
+        barrel.y = barrel.fallStartY;
+      }
+      continue; // no shooter-collision check while still airborne mid-throw
+    }
+
+    // phase === 'falling'
+    barrel.y += (barrel.speed + rampSteps * 0.08 * (state.rampMultiplier || 1)) * (barrel.fallMultiplier || 1) * dt * 0.06;
+    barrel.wobble += dt * 0.006;
+
+    // Contact should register the instant the barrel's BOTTOM EDGE reaches the
+    // hero's head/shoulder height — not when the barrel's centre nears the
+    // bottom of the canvas (that was firing far too late, after the barrel
+    // had visually already passed him).
+    const barrelBottom = barrel.y + barrel.radius;
+    const shooterContactY = canvas.height - 62; // roughly the hero's head height
+    if (barrel.alive && barrelBottom >= shooterContactY) {
+      const dx = Math.abs(barrel.x - shooterX);
+      if (dx <= shooterHitRadius + barrel.radius * 0.4) {
+        // Actual contact with the hero — this is the only way a life is lost
+        barrel.alive = false;
+        loseLifeToShooter(barrel);
+      }
+    }
+    // Off-lane barrels that were never going to hit the hero — clean up once
+    // they've fully fallen past the bottom of the screen, no penalty.
+    if (barrel.alive && barrel.y - barrel.radius > canvas.height + 10) {
+      barrel.alive = false;
+    }
+  }
+  state.barrels = state.barrels.filter(b => b.alive || b.popTimer > 0);
+
+  // Thrower arm animation countdown
+  if (state.thrower.armSwing > 0) state.thrower.armSwing -= dt;
+  // Shooter hit-flash countdown
+  if (state.shooterFlash > 0) state.shooterFlash -= dt;
+  // Screen shake decay
+  if (state.screenShake > 0) state.screenShake -= dt;
+
+  // Update bullets
+  for (const bullet of state.bullets) {
+    bullet.progress += dt / 140; // ~140ms travel time
+    if (bullet.progress >= 1 && !bullet.resolved) {
+      bullet.resolved = true;
+      if (bullet.target.alive && bullet.target.popTimer === 0) {
+        resolveShot(bullet.target);
+      }
+    }
+  }
+  state.bullets = state.bullets.filter(b => b.progress < 1.15);
+
+  // Update splash particles
+  for (const splash of state.splashes) {
+    splash.life -= dt;
+    for (const p of splash.particles) {
+      p.x += p.vx * dt * 0.06;
+      p.y += p.vy * dt * 0.06;
+      p.vy += 0.018 * dt; // gravity
+    }
+  }
+  state.splashes = state.splashes.filter(s => s.life > 0);
+
+  // Update sparkle particles
+  for (const sparkle of state.sparkles) {
+    sparkle.life -= dt;
+    for (const p of sparkle.particles) {
+      p.x += p.vx * dt * 0.06;
+      p.y += p.vy * dt * 0.06;
+    }
+  }
+  state.sparkles = state.sparkles.filter(s => s.life > 0);
+
+  // Unified clue-advance watcher: once the correct barrel is no longer present
+  // (whether shot, missed off to the side, or hit the hero), move to the next clue
+  // — unless the level-complete threshold was just hit, in which case celebrate instead.
+  const correctBarrelStillActive = state.barrels.some(b => b.correct);
+  if (!correctBarrelStillActive && !state._clueAdvanceScheduled) {
+    state._clueAdvanceScheduled = true;
+    if (state.levelComplete) {
+      setTimeout(() => runWhenUnpaused(showLevelComplete), 500);
+    } else if (state.pendingRevealActive) {
+      // Give the "the answer was..." reveal enough time to actually be read
+      setTimeout(() => runWhenUnpaused(() => {
+        state.pendingRevealActive = false;
+        pickNewClue();
+      }), 1800);
+    } else {
+      setTimeout(() => runWhenUnpaused(pickNewClue), 300);
+    }
+  }
+
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+/* =========================================================
+   LEVEL BACKGROUNDS
+   One static classroom-themed backdrop per level, drawn fresh each
+   frame (cheap — just shapes, no animation). Kept deliberately muted
+   and low-contrast so the barrels, sprites, and effects (gold sparkle,
+   purple/red splashes) still pop clearly against them.
+   ========================================================= */
+function drawBaseGradient(topColor, bottomColor) {
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  bgGrad.addColorStop(0, topColor);
+  bgGrad.addColorStop(1, bottomColor);
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawFloorStrip(color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(0, canvas.height - 24, canvas.width, 24);
+}
+
+function drawLevelBackground(tierIndex) {
+  const w = canvas.width, h = canvas.height;
+  ctx.save();
+
+  switch (tierIndex) {
+    case 0: { // Level 1: Apostrophe Academy — chalkboard
+      drawBaseGradient('#132a20', '#1c3a2c');
+      ctx.fillStyle = 'rgba(20, 46, 34, 0.55)';
+      ctx.fillRect(60, 40, w - 120, 150);
+      ctx.strokeStyle = 'rgba(180, 140, 90, 0.35)'; // wooden frame
+      ctx.lineWidth = 10;
+      ctx.strokeRect(60, 40, w - 120, 150);
+      ctx.font = 'italic 46px Georgia, serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      ctx.fillText("' don't '", 100, 130);
+      ctx.fillText("' it's '", 420, 165);
+      ctx.fillText("' boys' '", 620, 110);
+      drawFloorStrip('rgba(120, 160, 130, 0.10)');
+      break;
+    }
+    case 1: { // Level 2: Word Starters — bookshelf band
+      drawBaseGradient('#1a1f33', '#232a45');
+      const spineColors = ['#5c4b8a', '#8a5c4b', '#4b7a8a', '#7a8a4b', '#8a4b6a'];
+      for (let i = 0; i < 14; i++) {
+        ctx.fillStyle = spineColors[i % spineColors.length];
+        ctx.globalAlpha = 0.22;
+        ctx.fillRect(20 + i * 62, 30, 46, 90);
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(120, 100, 60, 0.18)'; // shelf ledge
+      ctx.fillRect(0, 120, w, 8);
+      drawFloorStrip('rgba(90, 110, 160, 0.10)');
+      break;
+    }
+    case 2: { // Level 3: Sound Tricksters — speech bubbles / soundwaves
+      drawBaseGradient('#132433', '#1c3a4a');
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.arc(150 + i * 40, 90, 20 + i * 12, -0.8, 0.8);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.roundRect(w - 260, 30, 200, 90, 16);
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+      ctx.stroke();
+      ctx.font = '28px Georgia, serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      ctx.fillText('ch?', w - 200, 85);
+      drawFloorStrip('rgba(90, 150, 170, 0.10)');
+      break;
+    }
+    case 3: { // Level 4: Prefix Power — building blocks
+      drawBaseGradient('#241a2e', '#33233f');
+      const blockColors = ['rgba(255,183,3,0.14)', 'rgba(6,214,160,0.12)', 'rgba(239,71,111,0.10)', 'rgba(72,202,228,0.12)'];
+      let bx = 30;
+      const blockY = h - 150;
+      [50, 42, 58, 46].forEach((bw, i) => {
+        ctx.fillStyle = blockColors[i % blockColors.length];
+        ctx.fillRect(bx, blockY - (i % 2) * 34, bw, 34);
+        bx += bw + 6;
+      });
+      let bx2 = w - 220;
+      [46, 52, 40].forEach((bw, i) => {
+        ctx.fillStyle = blockColors[(i + 2) % blockColors.length];
+        ctx.fillRect(bx2, blockY - ((i + 1) % 2) * 34, bw, 34);
+        bx2 += bw + 6;
+      });
+      drawFloorStrip('rgba(150, 110, 180, 0.10)');
+      break;
+    }
+    case 4: { // Level 5: Silent Letter Detectives — noir/magnifying glass
+      drawBaseGradient('#191d24', '#242a35');
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(w - 140, 90, 42, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(w - 110, 122);
+      ctx.lineTo(w - 70, 162);
+      ctx.stroke();
+      ctx.font = '22px Georgia, serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.10)';
+      ctx.fillText('gh?  ps?  rh?', 60, 80);
+      drawFloorStrip('rgba(120, 130, 150, 0.10)');
+      break;
+    }
+    case 5: { // Level 6: Number Ninjas — graph paper grid
+      drawBaseGradient('#101f2e', '#182f42');
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.lineWidth = 1;
+      for (let gx = 0; gx < w; gx += 40) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
+      }
+      for (let gy = 0; gy < h; gy += 40) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+      }
+      ctx.font = 'bold 30px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ['5', '8', '100', '3'].forEach((n, i) => ctx.fillText(n, 60 + i * 220, 90));
+      drawFloorStrip('rgba(90, 150, 200, 0.10)');
+      break;
+    }
+    case 6: { // Level 7: Shape-Shifters — soft geometric shapes
+      drawBaseGradient('#1c1730', '#2a2044');
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = '#8ecae6';
+      ctx.beginPath(); ctx.arc(120, 80, 46, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffb703';
+      ctx.beginPath();
+      ctx.moveTo(w - 150, 40); ctx.lineTo(w - 90, 130); ctx.lineTo(w - 210, 130);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#06d6a0';
+      ctx.fillRect(w / 2 - 30, 40, 60, 60);
+      ctx.globalAlpha = 1;
+      drawFloorStrip('rgba(140, 120, 180, 0.10)');
+      break;
+    }
+    case 7: { // Level 8: Suffix Spelling Shifters — blocks with letter tiles
+      drawBaseGradient('#241a2e', '#33233f');
+      const tiles = ['–s', '–ed', '–ing', '–es'];
+      tiles.forEach((t, i) => {
+        const tx = 50 + i * 200;
+        ctx.fillStyle = 'rgba(255,183,3,0.12)';
+        ctx.fillRect(tx, 40, 50, 50);
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.16)';
+        ctx.fillText(t, tx + 6, 72);
+      });
+      drawFloorStrip('rgba(150, 110, 180, 0.10)');
+      break;
+    }
+    case 8: { // Level 9: Master Shape-Shifters — chameleon diamond pattern
+      drawBaseGradient('#16211c', '#1e2f27');
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = '#06d6a0';
+      for (let dx = -40; dx < w + 40; dx += 60) {
+        for (let dy = 20; dy < 160; dy += 60) {
+          ctx.beginPath();
+          ctx.moveTo(dx, dy - 20);
+          ctx.lineTo(dx + 20, dy);
+          ctx.lineTo(dx, dy + 20);
+          ctx.lineTo(dx - 20, dy);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+      drawFloorStrip('rgba(100, 180, 140, 0.10)');
+      break;
+    }
+    default:
+      drawBaseGradient('#0d1b2a', '#16283f');
+      drawFloorStrip('rgba(76, 201, 240, 0.12)');
+  }
+
+  ctx.restore();
+}
+
+/* =========================================================
+   RENDER
+   ========================================================= */
+function render() {
+  ctx.save();
+  // screen shake
+  if (state.screenShake > 0) {
+    const mag = (state.screenShake / 260) * 8;
+    ctx.translate((Math.random() - 0.5) * mag, (Math.random() - 0.5) * mag);
+  }
+
+  ctx.clearRect(-20, -20, canvas.width + 40, canvas.height + 40);
+
+  drawLevelBackground(state.tierIndex);
+
+  drawThrower();
+  drawShooter();
+
+  for (const barrel of state.barrels) {
+    if (barrel.phase === 'waiting') continue;
+    ctx.save();
+    let scale = 1;
+    if (barrel.popTimer > 0) {
+      const t = barrel.popTimer / 420;
+      scale = 1 + (1 - t) * 0.9;
+      ctx.globalAlpha = t;
+    }
+    const rot = Math.sin(barrel.wobble || 0) * 0.12;
+    ctx.translate(barrel.x, barrel.y);
+    ctx.rotate(rot);
+    ctx.scale(scale, scale);
+
+    // drop shadow
+    ctx.save();
+    ctx.globalAlpha *= 0.25;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(4, 6, 42, 30, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // barrel body with gradient + highlight
+    let bodyColor1 = '#a9682f', bodyColor2 = '#6b3d16';
+    if (barrel.popTimer > 0) {
+      if (barrel.result === 'good') { bodyColor1 = '#2de8b5'; bodyColor2 = '#06a67e'; }
+      else { bodyColor1 = '#ff6b8a'; bodyColor2 = '#c2274a'; }
+    }
+    const grad = ctx.createLinearGradient(-40, -32, 40, 32);
+    grad.addColorStop(0, bodyColor1);
+    grad.addColorStop(1, bodyColor2);
+    ctx.beginPath();
+    ctx.roundRect(-40, -32, 80, 64, 14);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // highlight sheen
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath();
+    ctx.roundRect(-32, -26, 18, 52, 8);
+    ctx.fill();
+
+    // barrel bands
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(-40, -14); ctx.lineTo(40, -14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-40, 14); ctx.lineTo(40, 14); ctx.stroke();
+
+    // face (only when not popping) — gives the barrel personality
+    if (barrel.popTimer === 0) {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.beginPath(); ctx.arc(-10, -2, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(10, -2, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // text
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 15px Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 3;
+    wrapText(barrel.text, 0, 10, 74, 16);
+
+    ctx.restore();
+  }
+
+  // bullets with trail
+  for (const bullet of state.bullets) {
+    const t = Math.min(bullet.progress, 1);
+    const bx = bullet.x + (bullet.targetX - bullet.x) * t;
+    const by = bullet.y + (bullet.targetY - bullet.y) * t;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,214,10,0.5)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(bullet.x, bullet.y);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.fillStyle = '#ffd60a';
+    ctx.shadowColor = '#ffd60a';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(bx, by, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // splashes — purple for wrong-barrel pops, red for hero hits (bigger, longer, glowing)
+  for (const splash of state.splashes) {
+    ctx.save();
+    const alpha = Math.max(splash.life / (splash.maxLife || 750), 0);
+    ctx.globalAlpha = alpha;
+    const col = splash.color || '#9d4edd';
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = col;
+    for (const p of splash.particles) {
+      ctx.beginPath();
+      ctx.arc(splash.x + p.x, splash.y + p.y, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // gold sparkles on correct hit
+  for (const sparkle of state.sparkles) {
+    ctx.save();
+    const alpha = Math.max(sparkle.life / 500, 0);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffd60a';
+    ctx.shadowColor = '#ffd60a';
+    ctx.shadowBlur = 12;
+    for (const p of sparkle.particles) {
+      ctx.beginPath();
+      ctx.arc(sparkle.x + p.x, sparkle.y + p.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function drawThrower() {
+  const x = canvas.width / 2;
+  const y = 32;
+  const armAngle = state.thrower.armSwing > 0
+    ? -1.1 + (1 - state.thrower.armSwing / 260) * 1.8
+    : -0.3;
+  ctx.save();
+  ctx.translate(x, y);
+
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(0, 30, 22, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // body with gradient
+  const bodyGrad = ctx.createLinearGradient(-18, -6, 18, 26);
+  bodyGrad.addColorStop(0, '#ffb703');
+  bodyGrad.addColorStop(1, '#e07a00');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.roundRect(-17, -6, 34, 32, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // head
+  const headGrad = ctx.createRadialGradient(-3, -19, 2, 0, -16, 13);
+  headGrad.addColorStop(0, '#ffe8c9');
+  headGrad.addColorStop(1, '#ffcf9c');
+  ctx.fillStyle = headGrad;
+  ctx.beginPath();
+  ctx.arc(0, -16, 13, 0, Math.PI * 2);
+  ctx.fill();
+
+  // face
+  ctx.fillStyle = '#3d2b1f';
+  ctx.beginPath(); ctx.arc(-4, -17, 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4, -17, 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#3d2b1f';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(0, -12, 4, 0.2, Math.PI - 0.2); ctx.stroke();
+
+  // bandana
+  ctx.fillStyle = '#c9184a';
+  ctx.beginPath();
+  ctx.arc(0, -24, 13, Math.PI, Math.PI * 2);
+  ctx.fill();
+
+  // arm (swings when throwing)
+  ctx.strokeStyle = '#e07a00';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(15, 2);
+  ctx.lineTo(15 + Math.cos(armAngle) * 24, 2 + Math.sin(armAngle) * 24);
+  ctx.stroke();
+  // hand
+  ctx.fillStyle = '#ffcf9c';
+  ctx.beginPath();
+  ctx.arc(15 + Math.cos(armAngle) * 24, 2 + Math.sin(armAngle) * 24, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawShooter() {
+  const x = canvas.width / 2;
+  const y = canvas.height - 18;
+  const recoil = state.bullets.some(b => b.progress < 0.25) ? -4 : 0;
+  const hitJolt = state.shooterFlash > 0 ? (Math.random() - 0.5) * 6 : 0;
+  ctx.save();
+  ctx.translate(x + hitJolt, y + recoil);
+
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(0, 14, 22, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // body with gradient
+  const bodyGrad = ctx.createLinearGradient(-18, -30, 18, 0);
+  bodyGrad.addColorStop(0, '#48cae4');
+  bodyGrad.addColorStop(1, '#0077b6');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.roundRect(-17, -30, 34, 30, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // head
+  const headGrad = ctx.createRadialGradient(-3, -37, 2, 0, -34, 12);
+  headGrad.addColorStop(0, '#ffe8c9');
+  headGrad.addColorStop(1, '#ffcf9c');
+  ctx.fillStyle = headGrad;
+  ctx.beginPath();
+  ctx.arc(0, -34, 12, 0, Math.PI * 2);
+  ctx.fill();
+
+  // visor/goggles
+  ctx.fillStyle = '#023047';
+  ctx.beginPath();
+  ctx.roundRect(-10, -38, 20, 8, 4);
+  ctx.fill();
+  ctx.fillStyle = '#90e0ef';
+  ctx.beginPath(); ctx.arc(-5, -34, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5, -34, 3, 0, Math.PI * 2); ctx.fill();
+
+  // blaster
+  ctx.fillStyle = '#8ecae6';
+  ctx.fillRect(-7, -44, 14, 10);
+  ctx.fillStyle = '#023047';
+  ctx.fillRect(-3, -50, 6, 8);
+
+  // red hit-flash overlay — flashes over the whole sprite when a barrel connects
+  if (state.shooterFlash > 0) {
+    const flashAlpha = Math.min(state.shooterFlash / 400, 1) * 0.65;
+    ctx.globalAlpha = flashAlpha;
+    ctx.fillStyle = '#ff1744';
+    ctx.beginPath();
+    ctx.roundRect(-17, -30, 34, 30, 10);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, -34, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+}
+
+function wrapText(text, cx, cy, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let lines = [];
+  let current = '';
+  for (const w of words) {
+    const test = current ? current + ' ' + w : w;
+    if (ctx.measureText(test).width > maxWidth && current) {
+      lines.push(current);
+      current = w;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  const startY = cy - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((line, i) => ctx.fillText(line, cx, startY + i * lineHeight));
+}
+
+/* =========================================================
+   GAME OVER
+   ========================================================= */
+function endGame() {
+  state.running = false;
+  hideTypeAnswerBar();
+  playSound('gameover');
+  saveBestScoreIfHigher(state.tierIndex, state.score);
+  const acc = state.accuracyTotal > 0 ? Math.round((state.accuracyHits / state.accuracyTotal) * 100) : 0;
+  document.getElementById('finalTier').textContent = TIERS[state.tierIndex].short;
+  document.getElementById('finalScore').textContent = `Score: ${state.score}`;
+  document.getElementById('finalAccuracy').textContent = `Accuracy: ${acc}%`;
+  showScreen('overScreen');
+}
+
+/* =========================================================
+   LEVEL COMPLETE
+   ========================================================= */
+function showLevelComplete() {
+  state.running = false;
+  hideTypeAnswerBar();
+  playSound('levelComplete');
+  saveBestScoreIfHigher(state.tierIndex, state.score);
+  const acc = state.accuracyTotal > 0 ? Math.round((state.accuracyHits / state.accuracyTotal) * 100) : 0;
+  document.getElementById('levelCompleteName').textContent = TIERS[state.tierIndex].name;
+  document.getElementById('levelCompleteScore').textContent = `Score: ${state.score}`;
+  document.getElementById('levelCompleteAccuracy').textContent = `Accuracy: ${acc}%`;
+
+  const nextBtn = document.getElementById('nextLevelBtn');
+  const isLastLevel = state.tierIndex >= TIERS.length - 1;
+  nextBtn.style.display = isLastLevel ? 'none' : 'block';
+  if (isLastLevel) {
+    document.getElementById('levelCompleteName').textContent += ' — You\'ve finished every level! 🏆';
+  }
+
+  showScreen('levelCompleteScreen');
+}
+
+document.getElementById('nextLevelBtn').addEventListener('click', () => {
+  state.tierIndex = Math.min(state.tierIndex + 1, TIERS.length - 1);
+  startGame();
+});
+document.getElementById('levelCompleteMenuBtn').addEventListener('click', () => {
+  showScreen('startScreen');
+});
+
+</script>
+</body>
+</html>
