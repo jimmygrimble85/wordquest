@@ -511,20 +511,32 @@ function isFullscreen() {
 }
 
 function toggleFullscreen() {
-  if (!isFullscreen()) {
-    const el = document.documentElement;
-    const request = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-    if (!request) return;
-    const result = request.call(el);
-    if (result && result.catch) {
-      result.catch(() => {
-        alert("Fullscreen isn't available here — this can happen when the game is embedded inside a Google Site. Try opening the game's direct link in its own tab instead.");
-      });
+  try {
+    if (!isFullscreen()) {
+      const el = document.documentElement;
+      const request = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+      if (!request) {
+        alert("This browser doesn't support fullscreen.");
+        return;
+      }
+      const result = request.call(el);
+      if (result && result.catch) {
+        result.catch(() => showFullscreenBlockedMessage());
+      }
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+      if (exit) exit.call(document);
     }
-  } else {
-    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
-    if (exit) exit.call(document);
+  } catch (err) {
+    // Some browsers throw immediately (rather than rejecting a promise) when
+    // fullscreen is blocked — most commonly because the game is inside an
+    // iframe (like a Google Sites embed) that hasn't granted permission.
+    showFullscreenBlockedMessage();
   }
+}
+
+function showFullscreenBlockedMessage() {
+  alert("Fullscreen isn't available here — this can happen when the game is embedded inside a Google Site. Try opening the game's direct link in its own browser tab instead.");
 }
 
 function updateFullscreenBtnLabel() {
