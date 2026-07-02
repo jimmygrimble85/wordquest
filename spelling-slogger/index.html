@@ -40,7 +40,8 @@
 <body>
 <div id="app">
 
-<div id="muteBtn" style="position:fixed; top:12px; right:12px; z-index:1000; background:var(--bg-mid); border:1px solid #444; color:var(--text); border-radius:8px; padding:6px 12px; font-size:0.95em; cursor:pointer;">🔊</div>
+<div id="muteBtn" style="position:fixed; top:12px; right:12px; z-index:1000; background:var(--bg-mid); color:var(--text); border-radius:8px; padding:6px 12px; font-size:0.95em; cursor:pointer;">🔊</div>
+<div id="pauseBtn" class="hidden" style="position:fixed; top:12px; right:76px; z-index:1000; background:var(--bg-mid); color:var(--text); border-radius:8px; padding:6px 12px; font-size:0.95em; cursor:pointer;">⏸️ Pause</div>
 
 <!-- START SCREEN -->
 <div class="screen" id="startScreen">
@@ -65,6 +66,11 @@
   <div id="ballLabel" style="width:100%; text-align:center; font-size:1.4em; font-weight:bold; color:#ffd60a; min-height:1.3em;"></div>
   <div style="position:relative;">
     <canvas id="gameCanvas" width="860" height="420"></canvas>
+    <div id="pauseOverlay" class="hidden" style="position:absolute; inset:0; background:rgba(15,36,22,0.92); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+      <h1 style="margin:0;">⏸️ Paused</h1>
+      <button class="primary" id="resumeBtn" style="width:200px;">Resume</button>
+      <button class="secondary" id="quitToMenuBtn" style="width:200px; padding:12px;">Quit to Menu</button>
+    </div>
   </div>
 </div>
 
@@ -116,8 +122,83 @@ const LEVELS = [
       { affix: "ante–", type: "prefix", meaning: "before" },
       { affix: "anti–", type: "prefix", meaning: "against / opposite" },
       { affix: "–able", type: "suffix", meaning: "capable of / able to be" },
-      { affix: "–ible", type: "suffix", meaning: "capable of / able to be" },
+      { affix: "–ible", type: "suffix", meaning: "capable of / able to be (usually on Latin word roots)" },
       { affix: "–ure", type: "suffix", meaning: "the act/result of, or state of" }
+    ]
+  },
+  {
+    name: "Level 3: Number Ninjas",
+    items: [
+      { affix: "uni–", type: "root", meaning: "one" },
+      { affix: "bi–", type: "root", meaning: "two" },
+      { affix: "tri–", type: "root", meaning: "three" },
+      { affix: "quad–", type: "root", meaning: "four" },
+      { affix: "pent–", type: "root", meaning: "five" },
+      { affix: "hex–", type: "root", meaning: "six" },
+      { affix: "sept–", type: "root", meaning: "seven" },
+      { affix: "oct–", type: "root", meaning: "eight" },
+      { affix: "non–", type: "root", meaning: "nine" },
+      { affix: "dec–", type: "root", meaning: "ten" },
+      { affix: "cent–", type: "root", meaning: "hundred" },
+      { affix: "milli–", type: "root", meaning: "thousand" },
+      { affix: "semi–", type: "root", meaning: "half" },
+      { affix: "poly–", type: "root", meaning: "many" }
+    ]
+  },
+  {
+    name: "Level 4: Shape-Shifters",
+    items: [
+      { affix: "in–", type: "prefix", meaning: "not" },
+      { affix: "im–", type: "prefix", meaning: "not (before b/m/p)" },
+      { affix: "il–", type: "prefix", meaning: "not (before l)" },
+      { affix: "ir–", type: "prefix", meaning: "not (before r)" },
+      { affix: "con–", type: "prefix", meaning: "with / together" },
+      { affix: "col–", type: "prefix", meaning: "with / together (before l)" },
+      { affix: "com–", type: "prefix", meaning: "with / together (before b/m/p)" },
+      { affix: "cor–", type: "prefix", meaning: "with / together (before r)" }
+    ]
+  },
+  {
+    name: "Level 5: Apostrophe Academy",
+    items: [
+      { affix: "the dog's lead", type: "punctuation", meaning: "belongs to one dog" },
+      { affix: "the dogs' bones", type: "punctuation", meaning: "belongs to more than one dog" },
+      { affix: "don't", type: "punctuation", meaning: "short form of \"do not\"" },
+      { affix: "can't", type: "punctuation", meaning: "short form of \"cannot\"" },
+      { affix: "it's raining", type: "punctuation", meaning: "short form of \"it is\"" },
+      { affix: "its tail (the cat)", type: "punctuation", meaning: "belonging to \"it\" — no apostrophe needed" },
+      { affix: "I'll see you later", type: "punctuation", meaning: "short form of \"I will\"" },
+      { affix: "we're happy", type: "punctuation", meaning: "short form of \"we are\"" },
+      { affix: "the children's toys", type: "punctuation", meaning: "belongs to the children" },
+      { affix: "shouldn't", type: "punctuation", meaning: "short form of \"should not\"" },
+      { affix: "the boys' team", type: "punctuation", meaning: "belongs to more than one boy" },
+      { affix: "wouldn't", type: "punctuation", meaning: "short form of \"would not\"" },
+      { affix: "the cat's whiskers", type: "punctuation", meaning: "belongs to one cat" }
+    ]
+  },
+  {
+    name: "Level 6: Sound Tricksters",
+    items: [
+      { affix: "ei in reign", type: "spelling", meaning: "long a sound" },
+      { affix: "ei in ceiling", type: "spelling", meaning: "long e sound" },
+      { affix: "ou in enough", type: "spelling", meaning: "short u sound" },
+      { affix: "a in was", type: "spelling", meaning: "short o sound" },
+      { affix: "gh in enough", type: "spelling", meaning: "f sound" },
+      { affix: "ch in chef", type: "spelling", meaning: "sh sound" },
+      { affix: "ch in school", type: "spelling", meaning: "k sound" },
+      { affix: "ch in chair", type: "spelling", meaning: "ch sound" }
+    ]
+  },
+  {
+    name: "Level 7: Silent Letter Detectives",
+    items: [
+      { affix: "gn in sign", type: "spelling", meaning: "n sound (g is silent)" },
+      { affix: "gh in ghost", type: "spelling", meaning: "g sound (h is silent)" },
+      { affix: "ps in psychology", type: "spelling", meaning: "s sound (p is silent)" },
+      { affix: "pn in pneumonia", type: "spelling", meaning: "n sound (p is silent)" },
+      { affix: "mn in autumn", type: "spelling", meaning: "m sound (n is silent)" },
+      { affix: "rh in rhythm", type: "spelling", meaning: "r sound (h is silent)" },
+      { affix: "pt in receipt", type: "spelling", meaning: "t sound (p is silent)" }
     ]
   }
 ];
@@ -339,6 +420,7 @@ let state = {
   attempts: 0,
   correctHits: 0,
   running: false,
+  paused: false,
   currentQuestion: null, // { item, ballOrder: [correctIdx placement], ballIndex }
   usedItems: [],
   ball: null, // { releaseTime, duration, resolved, swung }
@@ -355,6 +437,20 @@ function showScreen(id) {
   ['startScreen','gameScreen','overScreen'].forEach(s => {
     document.getElementById(s).classList.toggle('hidden', s !== id);
   });
+  document.getElementById('pauseBtn').classList.toggle('hidden', id !== 'gameScreen');
+}
+
+// Delayed transitions (next ball, next question, game over) are scheduled
+// with real-world setTimeout calls, which don't know the game is paused.
+// This makes them wait politely instead of firing invisibly in the
+// background or getting lost entirely — same pattern as WordQuest.
+function runWhenUnpaused(fn) {
+  if (!state.running) return; // game has genuinely ended, abandon
+  if (state.paused) {
+    setTimeout(() => runWhenUnpaused(fn), 200);
+    return;
+  }
+  fn();
 }
 
 function populateLevelSelect() {
@@ -376,6 +472,30 @@ document.getElementById('classicBtn').addEventListener('click', () => {
 document.getElementById('retryBtn').addEventListener('click', () => showScreen('startScreen'));
 
 /* =========================================================
+   PAUSE / RESUME / QUIT
+   ========================================================= */
+document.getElementById('pauseBtn').addEventListener('click', () => {
+  if (!state.running || state.paused) return;
+  state.paused = true;
+  document.getElementById('pauseOverlay').classList.remove('hidden');
+});
+
+document.getElementById('resumeBtn').addEventListener('click', () => {
+  if (!state.paused) return;
+  state.paused = false;
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  state.lastFrameTime = performance.now(); // avoids a huge dt jump after the pause
+  requestAnimationFrame(gameLoop);
+});
+
+document.getElementById('quitToMenuBtn').addEventListener('click', () => {
+  state.running = false;
+  state.paused = false;
+  document.getElementById('pauseOverlay').classList.add('hidden');
+  showScreen('startScreen');
+});
+
+/* =========================================================
    INNINGS SETUP
    ========================================================= */
 function startInnings() {
@@ -393,6 +513,8 @@ function startInnings() {
   fiftyCelebration = null;
   state.usedItems = [];
   state.running = true;
+  state.paused = false;
+  document.getElementById('pauseOverlay').classList.add('hidden');
   updateHud();
   showScreen('gameScreen');
   nextQuestion();
@@ -426,7 +548,7 @@ function nextQuestion() {
   clueBarEl.innerHTML = `Which ball means <b>"${item.meaning}"</b>? Swing only at the right one!`;
   state.ball = null; // nothing bowled yet — give the player a moment to read the question
   document.getElementById('ballLabel').textContent = '';
-  setTimeout(() => { if (state.running) bowlNextBall(); }, 2000);
+  setTimeout(() => runWhenUnpaused(bowlNextBall), 2000);
 }
 
 function bowlNextBall() {
@@ -438,12 +560,28 @@ function bowlNextBall() {
     return;
   }
   const ballData = q.balls[q.ballIndex];
-  const duration = 2400;
+  const baseDuration = 2400;
+  // Occasional pace variation, like a real bowler mixing things up —
+  // a slower ball to buy the batter more time, or a quicker one to rush
+  // them. Everything downstream (resolve window, turn timing, colour
+  // zones) is already calculated from duration, so this flows through
+  // automatically without needing separate adjustment anywhere else.
+  const paceRoll = Math.random();
+  let duration = baseDuration;
+  let paceLabel = null;
+  if (paceRoll < 0.12) {
+    duration = baseDuration * 0.75; // faster — 25% quicker
+    paceLabel = 'fast';
+  } else if (paceRoll < 0.20) {
+    duration = baseDuration * 1.25; // slower — 25% more time
+    paceLabel = 'slow';
+  }
   triggerBowlingAnim();
   state.ball = {
     data: ballData,
     releaseTime: performance.now(),
     duration,
+    paceLabel,
     resolved: false,
     // Wrong balls turn late and miss the stumps; the correct ball goes
     // straight, so leaving it (bowled) genuinely clatters into them.
@@ -505,7 +643,7 @@ canvas.addEventListener('click', handleSwing);
 canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleSwing(e.touches[0]); }, { passive:false });
 
 function handleSwing() {
-  if (!state.running || !state.ball || state.ball.resolved) return;
+  if (!state.running || state.paused || !state.ball || state.ball.resolved) return;
   triggerSwingAnim();
   const elapsed = performance.now() - state.ball.releaseTime;
   const zone = getTimingZone(elapsed, state.ball.duration);
@@ -570,10 +708,10 @@ function resolveBall(swung, zone) {
 
 function advanceBallOrQuestion(questionResolved, extraDelay) {
   if (questionResolved) {
-    setTimeout(() => { if (state.running) nextQuestion(); }, 900 + (extraDelay || 0));
+    setTimeout(() => runWhenUnpaused(nextQuestion), 900 + (extraDelay || 0));
   } else {
     state.currentQuestion.ballIndex++;
-    setTimeout(() => { if (state.running) bowlNextBall(); }, 400);
+    setTimeout(() => runWhenUnpaused(bowlNextBall), 400);
   }
 }
 
@@ -593,9 +731,9 @@ function wicketFalls(label, isBowled) {
   state.hasCelebrated50 = false;
   updateHud();
   if (state.wickets <= 0) {
-    setTimeout(endInnings, 1000);
+    setTimeout(() => runWhenUnpaused(endInnings), 1000);
   } else {
-    setTimeout(() => { if (state.running) nextQuestion(); }, 1200);
+    setTimeout(() => runWhenUnpaused(nextQuestion), 1200);
   }
 }
 
@@ -608,7 +746,7 @@ function showResultFlash(text, color) {
    MAIN LOOP
    ========================================================= */
 function gameLoop(now) {
-  if (!state.running) return;
+  if (!state.running || state.paused) return; // paused: stop scheduling frames until resumed
   const dt = now - (state.lastFrameTime || now);
   state.lastFrameTime = now;
 
