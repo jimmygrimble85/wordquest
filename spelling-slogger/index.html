@@ -43,17 +43,37 @@
 <div id="muteBtn" style="position:fixed; top:12px; right:12px; z-index:1000; background:var(--bg-mid); color:var(--text); border-radius:8px; padding:6px 12px; font-size:0.95em; cursor:pointer;">🔊</div>
 <div id="pauseBtn" class="hidden" style="position:fixed; top:12px; right:76px; z-index:1000; background:var(--bg-mid); color:var(--text); border-radius:8px; padding:6px 12px; font-size:0.95em; cursor:pointer;">⏸️ Pause</div>
 <div id="fullscreenBtn" style="position:fixed; top:12px; right:170px; z-index:1000; background:var(--bg-mid); color:var(--text); border-radius:8px; padding:6px 12px; font-size:0.95em; cursor:pointer;">⛶ Fullscreen</div>
+<div id="versionLabel" style="position:fixed; bottom:10px; left:10px; z-index:1000; background:rgba(27,56,35,0.85); border:1px solid #444; color:#a8c9b0; border-radius:6px; padding:4px 10px; font-size:0.75em;">Alpha v1.0</div>
 
 <!-- START SCREEN -->
 <div class="screen" id="startScreen">
   <h1>🏏 Spelling Slogger</h1>
   <p class="sub">Watch the ball. Only swing at the correct answer — and time it well. Wrong ball = caught out. Miss the right ball = bowled out. Mistime your swing = out too!</p>
+  <button class="secondary" id="howToPlayBtn" style="padding:10px 18px; margin-bottom:4px;">❓ How to Play</button>
   <div class="card">
     <label style="display:block; margin-bottom:8px;">Choose your level</label>
-    <select id="levelSelect" style="width:100%; padding:10px; margin-bottom:14px; background:var(--bg-dark); color:var(--text); border:1px solid #444; border-radius:8px;"></select>
+    <select id="levelSelect" style="width:100%; padding:10px; margin-bottom:10px; background:var(--bg-dark); color:var(--text); border:1px solid #444; border-radius:8px;"></select>
+    <div id="personalBestDisplay" class="sub" style="text-align:center; margin-bottom:12px; font-size:0.85em;">No attempts yet</div>
     <button class="primary" id="classicBtn">🏏 Classic Innings (3 wickets)</button>
     <button class="secondary" id="scenarioBtn" style="width:100%; margin-top:10px; padding:12px;">🎯 Scenario Mode</button>
     <button class="secondary" id="extremeBtn" style="width:100%; margin-top:10px; padding:12px; border-color:#ef476f;">🔥 Extreme Scenario Mode</button>
+    <div id="scenarioWinsDisplay" class="sub" style="text-align:center; margin-top:10px; font-size:0.8em;">Scenarios won: 0</div>
+  </div>
+</div>
+
+<!-- HOW TO PLAY SCREEN -->
+<div class="screen hidden" id="howToPlayScreen">
+  <h1>❓ How to Play</h1>
+  <div class="card" style="text-align:left; line-height:1.7;">
+    <p><b>🎯 The goal:</b> a bowler sends down 3 balls (occasionally 4), one at a time. Only one of them is the correct answer to the clue at the top.</p>
+    <p><b>👀 Watching a ball:</b> if you think it's wrong, do nothing — leave it, it's safe. Swinging at a wrong ball gets you <b>caught out</b>.</p>
+    <p><b>🏏 The right ball:</b> you must swing! Leaving the correct ball go by gets you <b>bowled out</b>.</p>
+    <p><b>🎯 Timing the swing:</b> watch the vertical bar to the side of the pitch. Click the moment the white marker crosses the centre — closer to the blue middle scores more runs (6, then 4, then 1-2). Swing too early or late on the right ball and you're <b>mistimed out</b>, even though you picked correctly.</p>
+    <p><b>🏏 Classic Innings:</b> 3 wickets, score as many runs as you can before you're all out.</p>
+    <p><b>🎯 Scenario Mode:</b> a random challenge with its own target — survive a set number of balls, or chase a run target before wickets/balls run out.</p>
+    <p><b>🔥 Extreme Scenario Mode:</b> same as Scenario Mode, but questions are pulled from every level mixed together.</p>
+    <p><b>⏸️ Need a break?</b> Use the Pause button anytime during play.</p>
+    <button class="primary" id="howToPlayBackBtn" style="width:100%; margin-top:10px;">Got it, let's play!</button>
   </div>
 </div>
 
@@ -621,10 +641,11 @@ const clueBarEl = document.getElementById('clueBar');
    SCREENS
    ========================================================= */
 function showScreen(id) {
-  ['startScreen','scenarioBriefingScreen','gameScreen','overScreen'].forEach(s => {
+  ['startScreen','howToPlayScreen','scenarioBriefingScreen','gameScreen','overScreen'].forEach(s => {
     document.getElementById(s).classList.toggle('hidden', s !== id);
   });
   document.getElementById('pauseBtn').classList.toggle('hidden', id !== 'gameScreen');
+  if (id === 'startScreen') { updatePersonalBestDisplay(); updateScenarioWinsDisplay(); }
 }
 
 // Delayed transitions (next ball, next question, game over) are scheduled
@@ -650,6 +671,54 @@ function populateLevelSelect() {
   });
 }
 populateLevelSelect();
+
+/* =========================================================
+   PERSONAL BEST + SCENARIO WINS (localStorage only — stays on
+   this device, nothing sent anywhere, same approach as WordQuest)
+   ========================================================= */
+function getBestScores() {
+  try { return JSON.parse(localStorage.getItem('slogger_bestScores') || '{}'); }
+  catch (e) { return {}; }
+}
+function saveBestScoreIfHigher(levelIdx, runs) {
+  const scores = getBestScores();
+  if (!scores[levelIdx] || runs > scores[levelIdx]) {
+    scores[levelIdx] = runs;
+    localStorage.setItem('slogger_bestScores', JSON.stringify(scores));
+  }
+}
+function updatePersonalBestDisplay() {
+  const idx = parseInt(document.getElementById('levelSelect').value, 10);
+  const scores = getBestScores();
+  const best = scores[idx] || 0;
+  document.getElementById('personalBestDisplay').textContent =
+    best > 0 ? `🏅 Personal best (Classic): ${best} runs` : 'No attempts yet';
+}
+document.getElementById('levelSelect').addEventListener('change', updatePersonalBestDisplay);
+updatePersonalBestDisplay();
+
+function getScenarioWins() {
+  return parseInt(localStorage.getItem('slogger_scenarioWins') || '0', 10);
+}
+function incrementScenarioWins() {
+  localStorage.setItem('slogger_scenarioWins', String(getScenarioWins() + 1));
+}
+function updateScenarioWinsDisplay() {
+  document.getElementById('scenarioWinsDisplay').textContent = `Scenarios won: ${getScenarioWins()}`;
+}
+updateScenarioWinsDisplay();
+
+/* =========================================================
+   HOW TO PLAY (auto-shows once on first visit, via localStorage)
+   ========================================================= */
+document.getElementById('howToPlayBtn').addEventListener('click', () => showScreen('howToPlayScreen'));
+document.getElementById('howToPlayBackBtn').addEventListener('click', () => {
+  localStorage.setItem('slogger_seen_intro', '1');
+  showScreen('startScreen');
+});
+if (!localStorage.getItem('slogger_seen_intro')) {
+  showScreen('howToPlayScreen');
+}
 
 document.getElementById('classicBtn').addEventListener('click', () => {
   initAudio();
@@ -995,6 +1064,7 @@ function checkScenarioEnd() {
 function endScenario(won, message) {
   state.running = false;
   playSound(won ? 'clap' : 'gameover');
+  if (won) incrementScenarioWins();
   const acc = state.attempts > 0 ? Math.round((state.correctHits / state.attempts) * 100) : 0;
   document.getElementById('overScreenTitle').textContent = won ? '🏆 Scenario Complete!' : '💔 Scenario Failed';
   document.getElementById('scenarioResultMessage').textContent = message;
@@ -1726,6 +1796,7 @@ function drawBowledAnimation(now) {
 function endInnings() {
   state.running = false;
   playSound('gameover');
+  saveBestScoreIfHigher(state.levelIndex, state.runs);
   const acc = state.attempts > 0 ? Math.round((state.correctHits / state.attempts) * 100) : 0;
   document.getElementById('overScreenTitle').textContent = '🏏 All Out!';
   document.getElementById('scenarioResultMessage').textContent = '';
