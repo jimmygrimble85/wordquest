@@ -65,7 +65,7 @@
 <div class="screen hidden" id="howToPlayScreen">
   <h1>❓ How to Play</h1>
   <div class="card" style="text-align:left; line-height:1.7;">
-    <p><b>🎯 The goal:</b> a bowler sends down 3 balls (occasionally 4), one at a time. Only one of them is the correct answer to the clue at the top.</p>
+    <p><b>🎯 The goal:</b> a bowler sends down balls one at a time — you'll see a question at the top, and you need to hit the ball that matches the correct answer.</p>
     <p><b>👀 Watching a ball:</b> if you think it's wrong, do nothing — leave it, it's safe. Swinging at a wrong ball gets you <b>caught out</b>.</p>
     <p><b>🏏 The right ball:</b> you must swing! Leaving the correct ball go by gets you <b>bowled out</b>.</p>
     <p><b>🎯 Timing the swing:</b> watch the vertical bar to the side of the pitch. Click the moment the white marker crosses the centre — closer to the blue middle scores more runs (6, then 4, then 1-2). Swing too early or late on the right ball and you're <b>mistimed out</b>, even though you picked correctly.</p>
@@ -425,7 +425,54 @@ function initAudio() {
   masterGain = audioCtx.createGain();
   masterGain.gain.value = muted ? 0 : 1;
   masterGain.connect(audioCtx.destination);
+  startLandingMusic();
 }
+
+/* =========================================================
+   LANDING SOUNDTRACK
+   An original two-layer instrumental (bouncy off-beat bassline +
+   bright, brassy lead riff) for the menu screens — going for that
+   jaunty, syncopated, summery cricket-theme energy, built entirely
+   from oscillators we own outright rather than any existing
+   recording. Plays on the start/briefing/how-to-play/game-over
+   screens, stops the moment an innings actually begins.
+   ========================================================= */
+let landingMusicPlaying = false;
+let landingMusicStep = 0;
+let landingMusicTimer = null;
+const LANDING_STEP_MS = 190;
+
+// 0 = rest. Bass walks a I-vi-IV-V-ish shape with syncopated gaps —
+// classic "skank" rhythmic feel (hits land on the off-beats).
+const LANDING_BASS = [130.81, 0, 130.81, 164.81, 0, 146.83, 0, 196.00,
+                       0, 174.61, 0, 130.81, 164.81, 0, 196.00, 0];
+// Bright, syncopated riff on top — deliberately original, not
+// transcribed from any existing recording.
+const LANDING_LEAD = [0, 523.25, 0, 659.25, 523.25, 0, 587.33, 0,
+                       659.25, 0, 523.25, 0, 493.88, 587.33, 0, 659.25];
+
+function startLandingMusic() {
+  if (landingMusicPlaying || !audioCtx) return;
+  landingMusicPlaying = true;
+  landingMusicStep = 0;
+  scheduleLandingMusicStep();
+}
+
+function stopLandingMusic() {
+  landingMusicPlaying = false;
+  if (landingMusicTimer) clearTimeout(landingMusicTimer);
+}
+
+function scheduleLandingMusicStep() {
+  if (!landingMusicPlaying) return;
+  const bassFreq = LANDING_BASS[landingMusicStep % LANDING_BASS.length];
+  const leadFreq = LANDING_LEAD[landingMusicStep % LANDING_LEAD.length];
+  if (bassFreq) playTone(bassFreq, 0.24, 'triangle', 0.06);       // round, soft bass
+  if (leadFreq) playTone(leadFreq, 0.16, 'square', 0.045, 0, leadFreq * 1.002); // slight brassy edge
+  landingMusicStep++;
+  landingMusicTimer = setTimeout(scheduleLandingMusicStep, LANDING_STEP_MS);
+}
+
 function toggleMute() {
   muted = !muted;
   document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
@@ -700,6 +747,7 @@ function showScreen(id) {
   });
   document.getElementById('pauseBtn').classList.toggle('hidden', id !== 'gameScreen');
   if (id === 'startScreen') { updatePersonalBestDisplay(); updateScenarioWinsDisplay(); }
+  if (id === 'gameScreen') { stopLandingMusic(); } else if (audioCtx) { startLandingMusic(); }
 }
 
 // Delayed transitions (next ball, next question, game over) are scheduled
