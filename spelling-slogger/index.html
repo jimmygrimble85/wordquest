@@ -26,6 +26,7 @@
   button.primary { background:var(--accent); color:#16281a; font-weight:bold; width:100%; font-size:1.1em; padding:14px; }
   button.primary:hover { background:var(--accent2); color:white; }
   button.secondary { background:transparent; color:var(--text); border:1px solid #667; }
+  .speed-btn.active-speed { background: var(--accent); color: #0f2416; border-color: var(--accent); font-weight: bold; }
   button:disabled { opacity:0.4; cursor:not-allowed; }
   #hud { display:flex; justify-content:flex-start; align-items:center; flex-wrap:wrap; gap:8px; width:100%; padding:8px 4px; font-size:0.95em; }
   #hud span { background:var(--bg-mid); padding:6px 12px; border-radius:8px; }
@@ -50,6 +51,48 @@
   <h1>🏏 Spelling Slogger</h1>
   <p class="sub">Watch the ball. Only swing at the correct answer — and time it well. Wrong ball = caught out. Miss the right ball = bowled out. Mistime your swing = out too!</p>
   <button class="secondary" id="howToPlayBtn" style="padding:10px 18px; margin-bottom:4px;">❓ How to Play</button>
+
+  <div class="card">
+    <div style="display:flex; flex-direction:column; align-items:center; gap:6px; margin:10px 0; position:relative;">
+      <div style="position:relative; width:380px; max-width:100%; height:220px;">
+        <!-- Buttons sit on a proper arc above the ball (radius 135px from ball
+             centre, at -60°/0°/60°) so spacing scales correctly regardless of
+             each label's length, rather than eyeballed fixed offsets. -->
+        <button class="secondary speed-btn" data-speed="village" data-angle="-60" style="position:absolute; left:73px; top:75px; transform:translate(-50%,-50%); padding:6px 10px; font-size:0.78em; white-space:nowrap;">🏘️ Village</button>
+        <button class="secondary speed-btn" data-speed="county" data-angle="0" style="position:absolute; left:190px; top:12px; transform:translate(-50%,-50%); padding:6px 10px; font-size:0.78em; white-space:nowrap;">🏟️ County</button>
+        <button class="secondary speed-btn" data-speed="westindies" data-angle="60" style="position:absolute; left:307px; top:75px; transform:translate(-50%,-50%); padding:6px 10px; font-size:0.78em; white-space:nowrap;">🔥 80s West Indies</button>
+
+        <!-- The ball — seam rotates to point directly at whichever button is selected -->
+        <svg id="speedNeedle" width="100" height="100" viewBox="0 0 100 100"
+             style="position:absolute; left:190px; top:150px; transform:translate(-50%,-50%) rotate(0deg); transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); filter: drop-shadow(0 3px 8px rgba(0,0,0,0.45));">
+          <defs>
+            <radialGradient id="ballGrad" cx="35%" cy="30%" r="75%">
+              <stop offset="0%" stop-color="#e8564a"/>
+              <stop offset="55%" stop-color="#b91c1c"/>
+              <stop offset="100%" stop-color="#7a1010"/>
+            </radialGradient>
+          </defs>
+          <circle cx="50" cy="50" r="46" fill="url(#ballGrad)" stroke="#4a0808" stroke-width="1.5"/>
+          <!-- seam: runs the full length of the ball, edge to edge — the top
+               end is the precise pointer (sweeps to -60°/0°/60° with the
+               ball's rotation), the bottom end just points away, as expected -->
+          <path d="M 50 92 Q 42 50 50 8" fill="none" stroke="#f5e9c9" stroke-width="2.2" stroke-linecap="round"/>
+          <g stroke="#f5e9c9" stroke-width="1.5">
+            <line x1="52" y1="86" x2="47" y2="83" />
+            <line x1="49" y1="75" x2="44" y2="73" />
+            <line x1="46" y1="63" x2="41" y2="62" />
+            <line x1="45" y1="50" x2="40" y2="50" />
+            <line x1="46" y1="37" x2="41" y2="38" />
+            <line x1="49" y1="25" x2="44" y2="27" />
+            <line x1="52" y1="14" x2="47" y2="17" />
+          </g>
+        </svg>
+      </div>
+      <div id="speedLabel" style="font-weight:bold; color:var(--accent); font-size:1.05em;">County</div>
+      <label style="text-align:center; display:block; font-size:0.85em; opacity:0.8;">Bowling Speed</label>
+    </div>
+  </div>
+
   <div class="card">
     <label style="display:block; margin-bottom:8px;">Choose your level</label>
     <select id="levelSelect" style="width:100%; padding:10px; margin-bottom:10px; background:var(--bg-dark); color:var(--text); border:1px solid #444; border-radius:8px;"></select>
@@ -473,6 +516,39 @@ function scheduleLandingMusicStep() {
   landingMusicTimer = setTimeout(scheduleLandingMusicStep, LANDING_STEP_MS);
 }
 
+/* =========================================================
+   GAMEPLAY SOUNDTRACK
+   Deliberately much sparser and quieter than the landing tune —
+   a slow, understated pulse, not a full riff — since it has to sit
+   underneath bat cracks, wickets, applause, and Howzat without
+   fighting them for attention. Single layer only.
+   ========================================================= */
+let gameplayMusicPlaying = false;
+let gameplayMusicStep = 0;
+let gameplayMusicTimer = null;
+const GAMEPLAY_STEP_MS = 280;
+const GAMEPLAY_PULSE = [98.00, 0, 0, 0, 123.47, 0, 0, 0, 110.00, 0, 0, 0, 98.00, 0, 0, 0];
+
+function startGameplayMusic() {
+  if (gameplayMusicPlaying || !audioCtx) return;
+  gameplayMusicPlaying = true;
+  gameplayMusicStep = 0;
+  scheduleGameplayMusicStep();
+}
+
+function stopGameplayMusic() {
+  gameplayMusicPlaying = false;
+  if (gameplayMusicTimer) clearTimeout(gameplayMusicTimer);
+}
+
+function scheduleGameplayMusicStep() {
+  if (!gameplayMusicPlaying) return;
+  const freq = GAMEPLAY_PULSE[gameplayMusicStep % GAMEPLAY_PULSE.length];
+  if (freq) playTone(freq, 0.5, 'sine', 0.025); // very soft — background, not foreground
+  gameplayMusicStep++;
+  gameplayMusicTimer = setTimeout(scheduleGameplayMusicStep, GAMEPLAY_STEP_MS);
+}
+
 function toggleMute() {
   muted = !muted;
   document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
@@ -747,7 +823,13 @@ function showScreen(id) {
   });
   document.getElementById('pauseBtn').classList.toggle('hidden', id !== 'gameScreen');
   if (id === 'startScreen') { updatePersonalBestDisplay(); updateScenarioWinsDisplay(); }
-  if (id === 'gameScreen') { stopLandingMusic(); } else if (audioCtx) { startLandingMusic(); }
+  if (id === 'gameScreen') {
+    stopLandingMusic();
+    if (audioCtx) startGameplayMusic();
+  } else {
+    stopGameplayMusic();
+    if (audioCtx) startLandingMusic();
+  }
 }
 
 // Delayed transitions (next ball, next question, game over) are scheduled
@@ -811,6 +893,34 @@ function updateScenarioWinsDisplay() {
 updateScenarioWinsDisplay();
 
 /* =========================================================
+   BOWLING SPEED DIAL (Novice / Intermediate / Pro)
+   A global time multiplier stacking with Scenario Mode's own pace
+   modifier and the per-ball random variation — same layered
+   approach as WordQuest's dial. Persisted via localStorage, same
+   on-device-only approach as everything else.
+   ========================================================= */
+const SPEED_TIME_MULTIPLIERS = { village: 1.4, county: 1.15, westindies: 1.0 }; // higher = more time = easier
+const SPEED_LABELS = { village: 'Village', county: 'County', westindies: '80s West Indies' };
+const SPEED_ANGLES = { village: -60, county: 0, westindies: 60 };
+let gameSpeedTier = localStorage.getItem('slogger_speedTier') || 'county';
+let gameSpeedTimeMultiplier = SPEED_TIME_MULTIPLIERS[gameSpeedTier];
+
+function setSpeedTier(tier) {
+  gameSpeedTier = tier;
+  gameSpeedTimeMultiplier = SPEED_TIME_MULTIPLIERS[tier];
+  localStorage.setItem('slogger_speedTier', tier);
+  document.getElementById('speedNeedle').style.transform = `translate(-50%,-50%) rotate(${SPEED_ANGLES[tier]}deg)`;
+  document.getElementById('speedLabel').textContent = SPEED_LABELS[tier];
+  document.querySelectorAll('.speed-btn').forEach(b => {
+    b.classList.toggle('active-speed', b.dataset.speed === tier);
+  });
+}
+document.querySelectorAll('.speed-btn').forEach(btn => {
+  btn.addEventListener('click', () => setSpeedTier(btn.dataset.speed));
+});
+setSpeedTier(gameSpeedTier); // sync dial/label/buttons to stored or default value on load
+
+/* =========================================================
    HOW TO PLAY (auto-shows once on first visit, via localStorage)
    ========================================================= */
 document.getElementById('howToPlayBtn').addEventListener('click', () => showScreen('howToPlayScreen'));
@@ -867,6 +977,7 @@ document.getElementById('retryBtn').addEventListener('click', () => showScreen('
 document.getElementById('pauseBtn').addEventListener('click', () => {
   if (!state.running || state.paused) return;
   state.paused = true;
+  stopGameplayMusic();
   document.getElementById('pauseOverlay').classList.remove('hidden');
 });
 
@@ -874,6 +985,7 @@ document.getElementById('resumeBtn').addEventListener('click', () => {
   if (!state.paused) return;
   state.paused = false;
   document.getElementById('pauseOverlay').classList.add('hidden');
+  if (audioCtx) startGameplayMusic();
   state.lastFrameTime = performance.now(); // avoids a huge dt jump after the pause
   requestAnimationFrame(gameLoop);
 });
@@ -986,22 +1098,29 @@ function bowlNextBall() {
     return;
   }
   const ballData = q.balls[q.ballIndex];
-  // Scenario Mode can make the whole innings faster-paced (a difficulty
-  // lever), applied as a baseline before the per-ball random variation.
+  // Three levers stack together: the difficulty dial (Novice/Intermediate/
+  // Pro, a global setting), Scenario Mode's own pace modifier, and the
+  // per-ball random variation below. All three multiply into one duration,
+  // so picking Novice still lets a scenario's "faster bowling" difficulty
+  // lever come through — it just starts from a more generous baseline.
   const scenarioPace = (state.mode === 'scenario' && state.scenario) ? state.scenario.paceModifier : 1.0;
-  const baseDuration = 2400 / scenarioPace;
-  // Occasional pace variation, like a real bowler mixing things up —
-  // a slower ball to buy the batter more time, or a quicker one to rush
-  // them. Everything downstream (resolve window, turn timing, colour
-  // zones) is already calculated from duration, so this flows through
-  // automatically without needing separate adjustment anywhere else.
+  const baseDuration = (2400 / scenarioPace) * gameSpeedTimeMultiplier;
+  // Occasional pace variation, like a real bowler mixing things up — most
+  // deliveries are normal pace, some are a bit faster or slower, and
+  // rarely (1 in 10) a genuinely quick one that really tests you. Everything
+  // downstream (resolve window, turn timing, colour zones) is already
+  // calculated from duration, so this flows through automatically without
+  // needing separate adjustment anywhere else.
   const paceRoll = Math.random();
   let duration = baseDuration;
   let paceLabel = null;
-  if (paceRoll < 0.12) {
+  if (paceRoll < 0.10) {
+    duration = baseDuration * 0.67; // genuinely quick — 33% faster, rare
+    paceLabel = 'very fast';
+  } else if (paceRoll < 0.22) {
     duration = baseDuration * 0.75; // faster — 25% quicker
     paceLabel = 'fast';
-  } else if (paceRoll < 0.20) {
+  } else if (paceRoll < 0.30) {
     duration = baseDuration * 1.25; // slower — 25% more time
     paceLabel = 'slow';
   }
