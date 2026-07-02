@@ -42,6 +42,7 @@
 
 <div id="muteBtn" style="position:fixed; top:12px; right:12px; z-index:1000; background:var(--bg-mid); color:var(--text); border-radius:8px; padding:6px 12px; font-size:0.95em; cursor:pointer;">🔊</div>
 <div id="pauseBtn" class="hidden" style="position:fixed; top:12px; right:76px; z-index:1000; background:var(--bg-mid); color:var(--text); border-radius:8px; padding:6px 12px; font-size:0.95em; cursor:pointer;">⏸️ Pause</div>
+<div id="fullscreenBtn" style="position:fixed; top:12px; right:170px; z-index:1000; background:var(--bg-mid); color:var(--text); border-radius:8px; padding:6px 12px; font-size:0.95em; cursor:pointer;">⛶ Fullscreen</div>
 
 <!-- START SCREEN -->
 <div class="screen" id="startScreen">
@@ -175,19 +176,52 @@ const LEVELS = [
   {
     name: "Level 5: Apostrophe Academy",
     items: [
-      { affix: "the dog's lead", type: "punctuation", meaning: "belongs to one dog" },
-      { affix: "the dogs' bones", type: "punctuation", meaning: "belongs to more than one dog" },
+      // Contractions — already distinct enough, no clustering needed
       { affix: "don't", type: "punctuation", meaning: "short form of \"do not\"" },
       { affix: "can't", type: "punctuation", meaning: "short form of \"cannot\"" },
-      { affix: "it's raining", type: "punctuation", meaning: "short form of \"it is\"" },
-      { affix: "its tail (the cat)", type: "punctuation", meaning: "belonging to \"it\" — no apostrophe needed" },
       { affix: "I'll see you later", type: "punctuation", meaning: "short form of \"I will\"" },
       { affix: "we're happy", type: "punctuation", meaning: "short form of \"we are\"" },
-      { affix: "the children's toys", type: "punctuation", meaning: "belongs to the children" },
       { affix: "shouldn't", type: "punctuation", meaning: "short form of \"should not\"" },
-      { affix: "the boys' team", type: "punctuation", meaning: "belongs to more than one boy" },
       { affix: "wouldn't", type: "punctuation", meaning: "short form of \"would not\"" },
-      { affix: "the cat's whiskers", type: "punctuation", meaning: "belongs to one cat" }
+      // it / it's — a natural minimal pair on its own
+      { affix: "it's raining", type: "punctuation", meaning: "short form of \"it is\"", cluster: "it" },
+      { affix: "its tail (the cat)", type: "punctuation", meaning: "belonging to \"it\" — no apostrophe needed", cluster: "it" },
+      // Noun clusters — same noun, three forms: singular possessive, plural
+      // possessive, and plain plural (no apostrophe at all). Wrong balls
+      // are pulled from within the same cluster wherever possible, so a
+      // student can't eliminate options just by spotting a different noun
+      // — they actually have to read the apostrophe's position.
+      { affix: "the dog's lead", type: "punctuation", meaning: "belongs to one dog", cluster: "dog" },
+      { affix: "the dogs' bones", type: "punctuation", meaning: "belongs to more than one dog", cluster: "dog" },
+      { affix: "the dogs are barking", type: "punctuation", meaning: "more than one dog — no apostrophe needed", cluster: "dog" },
+
+      { affix: "the cat's whiskers", type: "punctuation", meaning: "belongs to one cat", cluster: "cat" },
+      { affix: "the cats' toys", type: "punctuation", meaning: "belongs to more than one cat", cluster: "cat" },
+      { affix: "the cats are sleeping", type: "punctuation", meaning: "more than one cat — no apostrophe needed", cluster: "cat" },
+
+      { affix: "the teacher's desk", type: "punctuation", meaning: "belongs to one teacher", cluster: "teacher" },
+      { affix: "the teachers' staffroom", type: "punctuation", meaning: "belongs to more than one teacher", cluster: "teacher" },
+      { affix: "the teachers are marking", type: "punctuation", meaning: "more than one teacher — no apostrophe needed", cluster: "teacher" },
+
+      { affix: "the student's book", type: "punctuation", meaning: "belongs to one student", cluster: "student" },
+      { affix: "the students' lockers", type: "punctuation", meaning: "belongs to more than one student", cluster: "student" },
+      { affix: "the students are working", type: "punctuation", meaning: "more than one student — no apostrophe needed", cluster: "student" },
+
+      { affix: "the boy's shoes", type: "punctuation", meaning: "belongs to one boy", cluster: "boy" },
+      { affix: "the boys' team", type: "punctuation", meaning: "belongs to more than one boy", cluster: "boy" },
+      { affix: "the boys are playing", type: "punctuation", meaning: "more than one boy — no apostrophe needed", cluster: "boy" },
+
+      { affix: "the class's trophy", type: "punctuation", meaning: "belongs to one class", cluster: "class" },
+      { affix: "the classes' timetable", type: "punctuation", meaning: "belongs to more than one class", cluster: "class" },
+      { affix: "the classes are noisy", type: "punctuation", meaning: "more than one class — no apostrophe needed", cluster: "class" },
+
+      { affix: "the bird's nest", type: "punctuation", meaning: "belongs to one bird", cluster: "bird" },
+      { affix: "the birds' feathers", type: "punctuation", meaning: "belongs to more than one bird", cluster: "bird" },
+      { affix: "the birds are singing", type: "punctuation", meaning: "more than one bird — no apostrophe needed", cluster: "bird" },
+
+      { affix: "the child's toy", type: "punctuation", meaning: "belongs to one child", cluster: "child" },
+      { affix: "the children's toys", type: "punctuation", meaning: "belongs to more than one child", cluster: "child" },
+      { affix: "the children are playing", type: "punctuation", meaning: "more than one child — no apostrophe needed", cluster: "child" }
     ]
   },
   {
@@ -324,6 +358,53 @@ function toggleMute() {
   if (masterGain) masterGain.gain.value = muted ? 0 : 1;
 }
 document.getElementById('muteBtn').addEventListener('click', () => { initAudio(); toggleMute(); });
+
+/* =========================================================
+   FULLSCREEN TOGGLE
+   Note: if this game is embedded in an iframe (e.g. a Google Sites
+   embed) without the "allowfullscreen" permission, the browser will
+   block the request — that's a browser security rule, not something
+   fixable from inside the game. We catch that case (both the
+   promise-rejection and synchronous-throw forms browsers use) and
+   let the player know, rather than failing silently.
+   ========================================================= */
+function isFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+function toggleFullscreen() {
+  try {
+    if (!isFullscreen()) {
+      const el = document.documentElement;
+      const request = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+      if (!request) {
+        alert("This browser doesn't support fullscreen.");
+        return;
+      }
+      const result = request.call(el);
+      if (result && result.catch) {
+        result.catch(() => showFullscreenBlockedMessage());
+      }
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+      if (exit) exit.call(document);
+    }
+  } catch (err) {
+    showFullscreenBlockedMessage();
+  }
+}
+
+function showFullscreenBlockedMessage() {
+  alert("Fullscreen isn't available here — this can happen when the game is embedded inside a Google Site. Try opening the game's direct link in its own browser tab instead.");
+}
+
+function updateFullscreenBtnLabel() {
+  document.getElementById('fullscreenBtn').textContent = isFullscreen() ? '⛶ Exit Fullscreen' : '⛶ Fullscreen';
+}
+
+document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', updateFullscreenBtnLabel);
+document.addEventListener('webkitfullscreenchange', updateFullscreenBtnLabel);
 
 function playTone(freq, duration, type, gainPeak, startOffset, freqEnd) {
   if (!audioCtx || muted) return;
@@ -689,10 +770,33 @@ function nextQuestion() {
   const item = pool[Math.floor(Math.random() * pool.length)];
   state.usedItems.push(item.affix);
 
-  const others = allItems.filter(i => i.affix !== item.affix);
-  const shuffledOthers = [...others].sort(() => Math.random() - 0.5).slice(0, 2);
-  const balls = [item.affix, shuffledOthers[0].affix, shuffledOthers[1].affix]
-    .map((affix, idx) => ({ affix, correct: affix === item.affix }))
+  // Ball count: Classic Mode occasionally bowls a 4th ball so the correct
+  // answer's position can't be deduced purely by elimination (leave 2,
+  // the 3rd must be right). Scenario Mode always stays at 3 — its
+  // difficulty is tuned around ball count as a scarce resource, and an
+  // unpredictable 4th ball could burn a huge chunk of a short scenario's
+  // budget on a single question.
+  const isScenario = state.mode === 'scenario';
+  const ballCount = (!isScenario && Math.random() < 0.18) ? 4 : 3;
+  const wrongNeeded = ballCount - 1;
+
+  // Prefer wrong balls from the same "cluster" as the correct item (e.g.
+  // other apostrophe examples using the same noun) — this stops a student
+  // eliminating options just by spotting a different noun, forcing them
+  // to actually parse the apostrophe (or affix) itself. Falls back to the
+  // wider pool if the cluster's too small to fully supply the question.
+  let wrongPool = item.cluster
+    ? allItems.filter(i => i.cluster === item.cluster && i.affix !== item.affix)
+    : [];
+  if (wrongPool.length < wrongNeeded) {
+    const broader = allItems.filter(i => i.affix !== item.affix && !wrongPool.includes(i));
+    const shuffledBroader = [...broader].sort(() => Math.random() - 0.5);
+    wrongPool = wrongPool.concat(shuffledBroader.slice(0, wrongNeeded - wrongPool.length));
+  }
+  const shuffledOthers = [...wrongPool].sort(() => Math.random() - 0.5).slice(0, wrongNeeded);
+
+  const balls = [item.affix, ...shuffledOthers.map(o => o.affix)]
+    .map(affix => ({ affix, correct: affix === item.affix }))
     .sort(() => Math.random() - 0.5);
 
   state.currentQuestion = { item, balls, ballIndex: 0 };
