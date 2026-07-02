@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spelling Slogger</title>
+<style>
+  :root {
+    --bg-dark: #0f2416;
+    --bg-mid: #1b3823;
+    --accent: #8bc34a;
+    --accent2: #c1272d;
+    --good: #06d6a0;
+    --bad: #ef476f;
+    --text: #f1faee;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; height:100%; background:var(--bg-dark); color:var(--text); font-family:'Segoe UI',Verdana,sans-serif; overflow:hidden; }
+  #app { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; height:100%; width:100%; padding-top:4px; overflow-y:auto; box-sizing:border-box; }
+  .screen { width:min(900px,96vw); display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .hidden { display:none !important; }
+  h1 { font-size:2.1em; margin:0; color:var(--accent); text-shadow:2px 2px 0 var(--accent2); }
+  p.sub { margin:0; opacity:0.85; text-align:center; max-width:600px; }
+  .card { background:var(--bg-mid); border-radius:12px; padding:22px; width:100%; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+  button { font-size:1em; padding:10px 16px; border-radius:8px; border:none; font-family:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); color:#16281a; font-weight:bold; width:100%; font-size:1.1em; padding:14px; }
+  button.primary:hover { background:var(--accent2); color:white; }
+  button.secondary { background:transparent; color:var(--text); border:1px solid #667; }
+  button:disabled { opacity:0.4; cursor:not-allowed; }
+  #hud { display:flex; justify-content:flex-start; align-items:center; flex-wrap:wrap; gap:8px; width:100%; padding:8px 4px; font-size:0.95em; }
+  #hud span { background:var(--bg-mid); padding:6px 12px; border-radius:8px; }
+  #clueBar { width:100%; text-align:center; font-size:1.25em; padding:10px; background:var(--bg-mid); border-radius:8px; min-height:1.4em; }
+  #clueBar b { color:var(--accent); }
+  #gameCanvas { display:block; border-radius:12px; touch-action:none; }
+  #resultFlash { position:absolute; font-weight:bold; font-size:1.6em; pointer-events:none; }
+  .stat { font-size:1.1em; margin:6px 0; }
+  .big { font-size:2.2em; color:var(--accent); font-weight:bold; }
+</style>
+</head>
+<body>
+<div id="app">
+
+<div id="muteBtn" style="position:fixed; top:12px; right:12px; z-index:1000; background:var(--bg-mid); border:1px solid #444; color:var(--text); border-radius:8px; padding:6px 12px; font-size:0.95em; cursor:pointer;">🔊</div>
+
+<!-- START SCREEN -->
+<div class="screen" id="startScreen">
+  <h1>🏏 Spelling Slogger</h1>
+  <p class="sub">Watch the ball. Only swing at the correct answer — and time it well. Wrong ball = caught out. Miss the right ball = bowled out. Mistime your swing = out too!</p>
+  <div class="card">
+    <label style="display:block; margin-bottom:8px;">Choose your level</label>
+    <select id="levelSelect" style="width:100%; padding:10px; margin-bottom:14px; background:var(--bg-dark); color:var(--text); border:1px solid #444; border-radius:8px;"></select>
+    <button class="primary" id="classicBtn">🏏 Classic Innings (3 wickets)</button>
+    <button class="secondary" id="scenarioBtn" disabled style="width:100%; margin-top:10px; padding:12px;">🎯 Scenario Mode (coming soon)</button>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div class="screen hidden" id="gameScreen" style="position:relative;">
+  <div id="hud">
+    <span id="runsDisplay">Runs: 0</span>
+    <span id="wicketsDisplay">Wickets: 🏏🏏🏏</span>
+    <span id="levelDisplay">Level 1</span>
+  </div>
+  <div id="clueBar">...</div>
+  <div id="ballLabel" style="width:100%; text-align:center; font-size:1.4em; font-weight:bold; color:#ffd60a; min-height:1.3em;"></div>
+  <div style="position:relative;">
+    <canvas id="gameCanvas" width="860" height="420"></canvas>
+  </div>
+</div>
+
+<!-- GAME OVER SCREEN -->
+<div class="screen hidden" id="overScreen">
+  <h1>🏏 All Out!</h1>
+  <div class="card" style="text-align:center;">
+    <div class="stat">Final score</div>
+    <div class="big" id="finalRuns">0 runs</div>
+    <div class="stat" id="finalAccuracy">Accuracy: 0%</div>
+  </div>
+  <button class="primary" id="retryBtn">Back to Menu</button>
+</div>
+
+</div>
+
+<script>
+/* =========================================================
+   CONTENT (reused from WordQuest — duplicated here for now
+   since each game is a standalone single-file for easy hosting.
+   NOTE for later: if content gets edited in one game, remember
+   to mirror the fix in the other — worth a shared-file approach
+   down the line if the content banks keep growing.)
+   ========================================================= */
+const LEVELS = [
+  {
+    name: "Level 1: Word Starters",
+    items: [
+      { affix: "re–", type: "prefix", meaning: "again / back" },
+      { affix: "un–", type: "prefix", meaning: "not / opposite of" },
+      { affix: "pre–", type: "prefix", meaning: "before" },
+      { affix: "dis–", type: "prefix", meaning: "not / opposite / away" },
+      { affix: "–ful", type: "suffix", meaning: "full of" },
+      { affix: "–less", type: "suffix", meaning: "without" },
+      { affix: "tele–", type: "root", meaning: "far / distant" },
+      { affix: "auto–", type: "root", meaning: "self" },
+      { affix: "bio–", type: "root", meaning: "life" },
+      { affix: "sub–", type: "prefix", meaning: "under / below" }
+    ]
+  },
+  {
+    name: "Level 2: Prefix Power",
+    items: [
+      { affix: "inter–", type: "prefix", meaning: "between / among" },
+      { affix: "over–", type: "prefix", meaning: "too much / above" },
+      { affix: "circum–", type: "prefix", meaning: "around" },
+      { affix: "contra–", type: "prefix", meaning: "against" },
+      { affix: "ambi–", type: "prefix", meaning: "both" },
+      { affix: "ante–", type: "prefix", meaning: "before" },
+      { affix: "anti–", type: "prefix", meaning: "against / opposite" },
+      { affix: "–able", type: "suffix", meaning: "capable of / able to be" },
+      { affix: "–ible", type: "suffix", meaning: "capable of / able to be" },
+      { affix: "–ure", type: "suffix", meaning: "the act/result of, or state of" }
+    ]
+  }
+];
+
+/* =========================================================
+   AUDIO (same synthesis approach as WordQuest)
+   ========================================================= */
+let audioCtx = null, masterGain = null, muted = false;
+function initAudio() {
+  if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  audioCtx = new AC();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = muted ? 0 : 1;
+  masterGain.connect(audioCtx.destination);
+}
+function toggleMute() {
+  muted = !muted;
+  document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
+  if (masterGain) masterGain.gain.value = muted ? 0 : 1;
+}
+document.getElementById('muteBtn').addEventListener('click', () => { initAudio(); toggleMute(); });
+
+function playTone(freq, duration, type, gainPeak, startOffset, freqEnd) {
+  if (!audioCtx || muted) return;
+  const t0 = audioCtx.currentTime + (startOffset || 0);
+  const osc = audioCtx.createOscillator();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  if (freqEnd) osc.frequency.exponentialRampToValueAtTime(Math.max(freqEnd, 1), t0 + duration);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(gainPeak, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+  osc.connect(g); g.connect(masterGain);
+  osc.start(t0); osc.stop(t0 + duration + 0.02);
+}
+
+// Real noise (not just oscillator tones) filtered into a crowd-cheer swell —
+// oscillators alone can't approximate applause convincingly, so this builds
+// an actual noise buffer once per play and shapes it with a bandpass filter.
+function playApplause(intensity) {
+  if (!audioCtx || muted) return;
+  const dur = 1.1;
+  const bufferSize = Math.floor(audioCtx.sampleRate * dur);
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 2200;
+  filter.Q.value = 0.6;
+  const g = audioCtx.createGain();
+  const peak = intensity === 'big' ? 0.26 : 0.16;
+  const t0 = audioCtx.currentTime;
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(peak, t0 + 0.12);
+  g.gain.linearRampToValueAtTime(peak * 0.7, t0 + dur * 0.6);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  src.connect(filter); filter.connect(g); g.connect(masterGain);
+  src.start(t0); src.stop(t0 + dur + 0.05);
+}
+
+// A single distinct clap, offset in time from the current moment — used to
+// build up a rhythmic sequence rather than one continuous swell.
+function playSingleClap(startOffset) {
+  if (!audioCtx || muted) return;
+  const dur = 0.09;
+  const bufferSize = Math.floor(audioCtx.sampleRate * dur);
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 2000;
+  filter.Q.value = 0.8;
+  const g = audioCtx.createGain();
+  const t0 = audioCtx.currentTime + startOffset;
+  g.gain.setValueAtTime(0.22, t0);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  src.connect(filter); filter.connect(g); g.connect(masterGain);
+  src.start(t0); src.stop(t0 + dur + 0.02);
+}
+
+// A short burst of individual claps, roughly rhythmic but not perfectly
+// mechanical, layered under a crowd swell for a genuine ovation.
+function playClapping() {
+  if (!audioCtx || muted) return;
+  [0, 0.16, 0.3, 0.48, 0.64, 0.85, 1.0, 1.2].forEach(o => playSingleClap(o));
+  playApplause('big');
+}
+
+function playBatHit() {
+  if (!audioCtx || muted) return;
+  const dur = 0.07;
+  const bufferSize = Math.floor(audioCtx.sampleRate * dur);
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize); // decaying noise
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 1600;
+  filter.Q.value = 1.1;
+  const g = audioCtx.createGain();
+  const t0 = audioCtx.currentTime;
+  g.gain.setValueAtTime(0.32, t0);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  src.connect(filter); filter.connect(g); g.connect(masterGain);
+  src.start(t0); src.stop(t0 + dur + 0.02);
+
+  playTone(170, 0.09, 'triangle', 0.22, 0, 85); // low wood-body thump underneath
+}
+
+// Actual spoken commentary via the browser's built-in text-to-speech —
+// After three different attempts to work around Chrome's speechSynthesis
+// engine reliably duplicating a single speak() call, we retired the
+// browser-TTS approach for the fallback sound below. It's not real spoken
+// words, but it's built purely from oscillators we control ourselves —
+// nothing outside our own code can duplicate or mispronounce it.
+function playSynthesizedHowzat() {
+  if (!audioCtx || muted) return;
+  // A rising, urgent sweep (the appeal building) into a sharp accented
+  // punch (the shout itself), landing on a lower note for weight.
+  playTone(320, 0.22, 'sawtooth', 0.18, 0, 760);
+  playTone(200, 0.05, 'square', 0.05, 0.18); // tiny gap/breath before the punch
+  playTone(680, 0.14, 'square', 0.24, 0.22);
+  playTone(430, 0.22, 'triangle', 0.18, 0.28, 220);
+}
+
+// A real recorded voice, hosted alongside the game (sounds/howzat.mp3) —
+// tried first every time. If it hasn't been uploaded yet, or fails to load
+// for any reason, this quietly falls back to the synthesized shout above
+// rather than breaking the game.
+const howzatAudio = new Audio('sounds/howzat.mp3');
+howzatAudio.preload = 'auto';
+let howzatAudioFailed = false;
+howzatAudio.addEventListener('error', () => { howzatAudioFailed = true; });
+
+function playHowzat() {
+  if (muted) return;
+  if (howzatAudioFailed) {
+    playSynthesizedHowzat();
+    return;
+  }
+  howzatAudio.currentTime = 0;
+  const playPromise = howzatAudio.play();
+  if (playPromise && playPromise.catch) {
+    playPromise.catch(() => {
+      howzatAudioFailed = true;
+      playSynthesizedHowzat();
+    });
+  }
+}
+
+function playSound(type) {
+  initAudio();
+  if (!audioCtx || muted) return;
+  switch (type) {
+    case 'six':
+      [523.25, 659.25, 783.99, 1046.5].forEach((f,i) => playTone(f, 0.18, 'triangle', 0.18, i*0.06));
+      playApplause('big');
+      break;
+    case 'four':
+      playTone(523.25, 0.14, 'sine', 0.17, 0);
+      playTone(659.25, 0.16, 'sine', 0.17, 0.08);
+      playApplause('small');
+      break;
+    case 'runs':
+      playTone(440, 0.12, 'sine', 0.14, 0);
+      break;
+    case 'wicket':
+      playTone(180, 0.3, 'sawtooth', 0.2, 0, 60);
+      playTone(120, 0.35, 'square', 0.15, 0.05, 40);
+      playHowzat();
+      break;
+    case 'bails':
+      // Light, sharp wooden clacks — bails are hollow and lightweight, so
+      // this needs a much brighter, thinner sound than the general wicket thud
+      playTone(1200, 0.04, 'square', 0.16, 0, 800);
+      playTone(950, 0.04, 'square', 0.13, 0.045, 650);
+      playTone(700, 0.05, 'triangle', 0.1, 0.09, 400);
+      break;
+    case 'boardClang':
+      playTone(1400, 0.12, 'square', 0.18, 0, 500);
+      playTone(900, 0.16, 'sawtooth', 0.14, 0.02, 300);
+      break;
+    case 'catch':
+      playTone(220, 0.08, 'sine', 0.16, 0, 130); // soft padded glove thump
+      break;
+    case 'clap':
+      playClapping();
+      break;
+    case 'leave':
+      playTone(300, 0.08, 'sine', 0.06, 0);
+      break;
+    case 'gameover':
+      [392, 349.23, 293.66, 220].forEach((f,i) => playTone(f, 0.35, 'triangle', 0.15, i*0.28));
+      break;
+  }
+}
+
+/* =========================================================
+   STATE
+   ========================================================= */
+let state = {
+  levelIndex: 0,
+  runs: 0,
+  wickets: 3,
+  attempts: 0,
+  correctHits: 0,
+  running: false,
+  currentQuestion: null, // { item, ballOrder: [correctIdx placement], ballIndex }
+  usedItems: [],
+  ball: null, // { releaseTime, duration, resolved, swung }
+};
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const clueBarEl = document.getElementById('clueBar');
+
+/* =========================================================
+   SCREENS
+   ========================================================= */
+function showScreen(id) {
+  ['startScreen','gameScreen','overScreen'].forEach(s => {
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+}
+
+function populateLevelSelect() {
+  const sel = document.getElementById('levelSelect');
+  sel.innerHTML = '';
+  LEVELS.forEach((lvl, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = lvl.name;
+    sel.appendChild(opt);
+  });
+}
+populateLevelSelect();
+
+document.getElementById('classicBtn').addEventListener('click', () => {
+  initAudio();
+  state.levelIndex = parseInt(document.getElementById('levelSelect').value, 10);
+  startInnings();
+});
+document.getElementById('retryBtn').addEventListener('click', () => showScreen('startScreen'));
+
+/* =========================================================
+   INNINGS SETUP
+   ========================================================= */
+function startInnings() {
+  state.runs = 0;
+  state.wickets = 3;
+  state.attempts = 0;
+  state.correctHits = 0;
+  state.sixCount = 0;
+  state.hasCelebrated50 = false;
+  state.runsAtLastWicket = 0; // baseline for "50 runs without losing a wicket" — resets each time a wicket falls
+  fielderCatchAnim = null;
+  hitAnim = null;
+  bowledAnim = null;
+  fireworks = null;
+  fiftyCelebration = null;
+  state.usedItems = [];
+  state.running = true;
+  updateHud();
+  showScreen('gameScreen');
+  nextQuestion();
+  state.lastFrameTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function updateHud() {
+  document.getElementById('runsDisplay').textContent = `Runs: ${state.runs}`;
+  document.getElementById('wicketsDisplay').textContent = 'Wickets: ' + '🏏'.repeat(state.wickets) + '❌'.repeat(3 - state.wickets);
+  document.getElementById('levelDisplay').textContent = LEVELS[state.levelIndex].name.split(':')[0];
+}
+
+/* =========================================================
+   QUESTION / BALL SEQUENCE
+   ========================================================= */
+function nextQuestion() {
+  const level = LEVELS[state.levelIndex];
+  let pool = level.items.filter(i => !state.usedItems.includes(i.affix));
+  if (pool.length === 0) { state.usedItems = []; pool = level.items; }
+  const item = pool[Math.floor(Math.random() * pool.length)];
+  state.usedItems.push(item.affix);
+
+  const others = level.items.filter(i => i.affix !== item.affix);
+  const shuffledOthers = [...others].sort(() => Math.random() - 0.5).slice(0, 2);
+  const balls = [item.affix, shuffledOthers[0].affix, shuffledOthers[1].affix]
+    .map((affix, idx) => ({ affix, correct: affix === item.affix }))
+    .sort(() => Math.random() - 0.5);
+
+  state.currentQuestion = { item, balls, ballIndex: 0 };
+  clueBarEl.innerHTML = `Which ball means <b>"${item.meaning}"</b>? Swing only at the right one!`;
+  state.ball = null; // nothing bowled yet — give the player a moment to read the question
+  document.getElementById('ballLabel').textContent = '';
+  setTimeout(() => { if (state.running) bowlNextBall(); }, 2000);
+}
+
+function bowlNextBall() {
+  const q = state.currentQuestion;
+  if (q.ballIndex >= q.balls.length) {
+    // Shouldn't normally happen (correct ball always resolves the question),
+    // but as a safety net, just start a new question.
+    nextQuestion();
+    return;
+  }
+  const ballData = q.balls[q.ballIndex];
+  const duration = 2400;
+  triggerBowlingAnim();
+  state.ball = {
+    data: ballData,
+    releaseTime: performance.now(),
+    duration,
+    resolved: false,
+    // Wrong balls turn late and miss the stumps; the correct ball goes
+    // straight, so leaving it (bowled) genuinely clatters into them.
+    // Batter stands to the left of the stumps — turning positive (right)
+    // always curves the ball away from them, never into their body.
+    turnDir: ballData.correct ? 0 : 1,
+    // The correct ball needs enough buffer for a genuinely late-but-valid
+    // swing (even a scoring one, up to the green/yellow zones) to still
+    // register before we conclude no swing happened at all. 80ms was far
+    // too tight — it was stealing swings that were only briefly late.
+    resolveCutoff: duration + (ballData.correct ? 340 : DISPLAY_HALF_RANGE + 30)
+  };
+  document.getElementById('ballLabel').textContent = `This ball: "${ballData.affix}"`;
+}
+
+/* =========================================================
+   TIMING BAR — colour by distance from the "perfect" moment
+   Thresholds defined once here; both the detection logic and the
+   visual gradient below derive from these same numbers, so the bar
+   can never visually drift out of sync with what actually counts.
+   ========================================================= */
+const ZONE_THRESHOLDS = { blue: 60, green: 150, yellow: 300, orange: 500 };
+const DISPLAY_HALF_RANGE = 550; // ms either side of "perfect" shown across the bar's full height
+
+function getTimingZone(elapsed, duration) {
+  const perfect = duration; // ball reaches the bat exactly at t=duration
+  const diff = Math.abs(elapsed - perfect);
+  if (diff <= ZONE_THRESHOLDS.blue) return 'blue';
+  if (diff <= ZONE_THRESHOLDS.green) return 'green';
+  if (diff <= ZONE_THRESHOLDS.yellow) return 'yellow';
+  if (diff <= ZONE_THRESHOLDS.orange) return 'orange';
+  return 'red';
+}
+const ZONE_COLORS = { blue: '#00d4ff', green: '#06d6a0', yellow: '#ffd60a', orange: '#fb8500', red: '#ef476f' };
+
+// Maps elapsed time to a 0-1 position along the vertical bar (0 = top, 1 = bottom),
+// with 0.5 (the exact centre) always corresponding to perfect timing.
+function timingBarFraction(elapsed, duration) {
+  const raw = (elapsed - (duration - DISPLAY_HALF_RANGE)) / (DISPLAY_HALF_RANGE * 2);
+  return Math.max(0, Math.min(1, raw));
+}
+
+// Late turn: wrong balls curve away from the stumps, but only after "perfect
+// timing" (elapsed = duration) has already passed — so watching for the turn
+// can never help decide whether to swing, only explain the miss afterwards.
+const TURN_MAGNITUDE = 46; // pixels of horizontal deflection at full turn
+function ballXOffset(elapsed, duration, turnDir) {
+  if (!turnDir) return 0;
+  const turnProgress = Math.max(0, Math.min(1, (elapsed - duration) / (DISPLAY_HALF_RANGE + 30)));
+  // ease-in, so the turn starts subtly and sharpens near the end
+  const eased = turnProgress * turnProgress;
+  return eased * TURN_MAGNITUDE * turnDir;
+}
+
+/* =========================================================
+   SWING HANDLING
+   ========================================================= */
+canvas.addEventListener('click', handleSwing);
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleSwing(e.touches[0]); }, { passive:false });
+
+function handleSwing() {
+  if (!state.running || !state.ball || state.ball.resolved) return;
+  triggerSwingAnim();
+  const elapsed = performance.now() - state.ball.releaseTime;
+  const zone = getTimingZone(elapsed, state.ball.duration);
+  resolveBall(true, zone);
+}
+
+function resolveBall(swung, zone) {
+  const ball = state.ball;
+  if (ball.resolved) return;
+  ball.resolved = true;
+  state.attempts++;
+  document.getElementById('ballLabel').textContent = '';
+
+  if (!swung) {
+    if (ball.data.correct) {
+      // Bowled — the right answer arrived and nothing was done about it
+      wicketFalls('Bowled!', true);
+    } else {
+      playSound('leave');
+      advanceBallOrQuestion(false);
+    }
+    return;
+  }
+
+  // Swung — contact is made either way, so the bat-hit sound plays regardless
+  playBatHit();
+  if (!ball.data.correct) {
+    triggerHitAnim('caught', canvas.width/2 - 14, canvas.height - 105);
+    wicketFalls('Caught!');
+    return;
+  }
+
+  // Swung at the CORRECT ball — timing decides the outcome
+  state.correctHits++;
+  const contactX = canvas.width/2 - 14, contactY = canvas.height - 105;
+  if (zone === 'blue') {
+    state.runs += 6; playSound('six'); showResultFlash('SIX! 🚀', '#00d4ff');
+    state.sixCount = (state.sixCount || 0) + 1;
+    const hitsBoard = state.sixCount % 5 === 0;
+    triggerHitAnim(hitsBoard ? 'sixBoard' : 'six', contactX, contactY);
+  } else if (zone === 'green') {
+    state.runs += 4; playSound('four'); showResultFlash('FOUR!', '#06d6a0');
+    triggerHitAnim('four', contactX, contactY);
+  } else if (zone === 'yellow') {
+    const r = Math.random() < 0.5 ? 1 : 2;
+    state.runs += r; playSound('runs'); showResultFlash(`+${r}`, '#ffd60a');
+    triggerHitAnim('runs', contactX, contactY);
+  } else {
+    wicketFalls('Mistimed!');
+    return;
+  }
+  updateHud();
+
+  let extraDelay = 0;
+  if ((state.runs - state.runsAtLastWicket) >= 50 && !state.hasCelebrated50) {
+    state.hasCelebrated50 = true;
+    triggerFiftyCelebration();
+    extraDelay = 1900; // let the celebration actually play out before the next ball
+  }
+  advanceBallOrQuestion(true, extraDelay);
+}
+
+function advanceBallOrQuestion(questionResolved, extraDelay) {
+  if (questionResolved) {
+    setTimeout(() => { if (state.running) nextQuestion(); }, 900 + (extraDelay || 0));
+  } else {
+    state.currentQuestion.ballIndex++;
+    setTimeout(() => { if (state.running) bowlNextBall(); }, 400);
+  }
+}
+
+function wicketFalls(label, isBowled) {
+  state.wickets--;
+  playSound('wicket');
+  showResultFlash(label + ' OUT!', '#ef476f');
+  if (isBowled) {
+    triggerBowledAnimation(canvas.width / 2, canvas.height - 34);
+    playSound('bails');
+  }
+  umpireOutTime = performance.now();
+  // A new "unbeaten 50" stretch starts from here — reset the baseline and
+  // allow another celebration once the player builds another 50 runs
+  // without losing this next wicket.
+  state.runsAtLastWicket = state.runs;
+  state.hasCelebrated50 = false;
+  updateHud();
+  if (state.wickets <= 0) {
+    setTimeout(endInnings, 1000);
+  } else {
+    setTimeout(() => { if (state.running) nextQuestion(); }, 1200);
+  }
+}
+
+let flashMsg = null;
+function showResultFlash(text, color) {
+  flashMsg = { text, color, life: 900 };
+}
+
+/* =========================================================
+   MAIN LOOP
+   ========================================================= */
+function gameLoop(now) {
+  if (!state.running) return;
+  const dt = now - (state.lastFrameTime || now);
+  state.lastFrameTime = now;
+
+  if (state.ball && !state.ball.resolved) {
+    const elapsed = now - state.ball.releaseTime;
+    if (elapsed > state.ball.resolveCutoff) {
+      resolveBall(false, null); // ball passed, no swing
+    }
+  }
+  if (flashMsg) {
+    flashMsg.life -= dt;
+    if (flashMsg.life <= 0) flashMsg = null;
+  }
+  if (screenShake > 0) screenShake = Math.max(0, screenShake - dt * 0.08);
+
+  render(now);
+  requestAnimationFrame(gameLoop);
+}
+
+/* =========================================================
+   RENDER
+   ========================================================= */
+function render(now) {
+  const w = canvas.width, h = canvas.height;
+  ctx.save();
+  if (screenShake > 0) {
+    ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+  }
+  ctx.clearRect(-10, -10, w + 20, h + 20);
+
+  // field
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, '#1a3a1f'); grad.addColorStop(1, '#0d1b0f');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h);
+
+  // mowing stripes — alternating bands across the outfield, classic groundskeeping look
+  for (let sy = 0; sy < h; sy += 36) {
+    if ((sy / 36) % 2 === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.025)';
+      ctx.fillRect(0, sy, w, 36);
+    }
+  }
+
+  // boundary rope, curving gently near the top of the field, with small flag markers
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, 22);
+  ctx.quadraticCurveTo(w/2, 8, w, 22);
+  ctx.stroke();
+  for (let fx = 30; fx < w; fx += 90) {
+    const fy = 22 - Math.sin((fx / w) * Math.PI) * 14;
+    ctx.fillStyle = fx % 180 < 90 ? '#ef476f' : '#f1faee';
+    ctx.beginPath();
+    ctx.moveTo(fx, fy - 10); ctx.lineTo(fx - 5, fy); ctx.lineTo(fx + 5, fy);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // pitch strip
+  ctx.fillStyle = 'rgba(210,180,120,0.25)';
+  ctx.fillRect(w/2 - 50, 0, 100, h);
+  // popping crease at the batter's end
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(w/2 - 46, h - 42); ctx.lineTo(w/2 + 46, h - 42);
+  ctx.stroke();
+
+  drawScoreboard(w - 142, 10);
+
+  // bowler, with an animated delivery arm
+  drawBowler(w/2, 50);
+  // umpire — further back than the bowler (bowler's-end position), and
+  // offset to the side rather than standing directly behind him
+  drawUmpire(w/2 + 48, 26, now);
+  // fielders — slightly closer in than the bowler, flanking left and right
+  getFielderPositions().forEach((f, i) => drawFielder(f.x, f.y, i, now));
+  // stumps (behind the batter, where the ball actually arrives) — hidden
+  // during the bowled animation, which draws its own broken/toppled version
+  if (!bowledAnim) drawStumps(w/2, h - 34);
+  // batter — stands slightly to the side so the stumps stay visible
+  drawBatter(w/2 - 26, h - 95);
+
+  if (hitAnim) drawHitAnim(now);
+  if (fireworks) drawFireworks(now);
+
+  // ball + vertical timing bar
+  if (state.ball && !state.ball.resolved) {
+    const elapsed = now - state.ball.releaseTime;
+    const t = Math.min(elapsed / state.ball.duration, 1.15);
+    const ballY = 70 + t * (h - 175);
+    const ballX = w/2 + ballXOffset(elapsed, state.ball.duration, state.ball.turnDir);
+    ctx.fillStyle = '#8B0000';
+    ctx.beginPath(); ctx.arc(ballX, ballY, 9, 0, Math.PI*2); ctx.fill();
+
+    drawTimingBar(elapsed, state.ball.duration);
+  }
+
+  if (bowledAnim) drawBowledAnimation(now);
+
+  if (flashMsg) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(flashMsg.life / 900, 1);
+    ctx.fillStyle = flashMsg.color;
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 6;
+    ctx.fillText(flashMsg.text, w/2, h/2);
+    ctx.restore();
+  }
+  ctx.restore(); // matches the screen-shake save() at the top of render()
+}
+
+function drawTimingBar(elapsed, duration) {
+  const barX = canvas.width - 54;
+  const barY = 90;
+  const barW = 22;
+  const barH = 220;
+
+  // Vertical gradient: red at both extremes, blending through orange/yellow/
+  // green to blue at the exact centre — stops derived from the same
+  // thresholds used for actual scoring, so it can't drift out of sync.
+  const grad = ctx.createLinearGradient(0, barY, 0, barY + barH);
+  grad.addColorStop(0, ZONE_COLORS.red);
+  grad.addColorStop(0.5 - (ZONE_THRESHOLDS.orange / (DISPLAY_HALF_RANGE * 2)), ZONE_COLORS.orange);
+  grad.addColorStop(0.5 - (ZONE_THRESHOLDS.yellow / (DISPLAY_HALF_RANGE * 2)), ZONE_COLORS.yellow);
+  grad.addColorStop(0.5 - (ZONE_THRESHOLDS.green / (DISPLAY_HALF_RANGE * 2)), ZONE_COLORS.green);
+  grad.addColorStop(0.5 - (ZONE_THRESHOLDS.blue / (DISPLAY_HALF_RANGE * 2)), ZONE_COLORS.blue);
+  grad.addColorStop(0.5, ZONE_COLORS.blue);
+  grad.addColorStop(0.5 + (ZONE_THRESHOLDS.blue / (DISPLAY_HALF_RANGE * 2)), ZONE_COLORS.blue);
+  grad.addColorStop(0.5 + (ZONE_THRESHOLDS.green / (DISPLAY_HALF_RANGE * 2)), ZONE_COLORS.green);
+  grad.addColorStop(0.5 + (ZONE_THRESHOLDS.yellow / (DISPLAY_HALF_RANGE * 2)), ZONE_COLORS.yellow);
+  grad.addColorStop(0.5 + (ZONE_THRESHOLDS.orange / (DISPLAY_HALF_RANGE * 2)), ZONE_COLORS.orange);
+  grad.addColorStop(1, ZONE_COLORS.red);
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(barX, barY, barW, barH, 6);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Centre line — a subtle marker for "perfect", always at the bar's midpoint
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(barX - 4, barY + barH / 2);
+  ctx.lineTo(barX + barW + 4, barY + barH / 2);
+  ctx.stroke();
+
+  // Moving white marker — click when this reaches the centre line
+  const fraction = timingBarFraction(elapsed, duration);
+  const markerY = barY + fraction * barH;
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.roundRect(barX - 5, markerY - 3, barW + 10, 6, 3);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('SWING', barX + barW / 2, barY - 10);
+}
+
+function drawFielder(x, y, index, now) {
+  const catching = fielderCatchAnim && fielderCatchAnim.index === index && (now - fielderCatchAnim.startTime) < 700;
+  const catchProgress = catching ? Math.min((now - fielderCatchAnim.startTime) / 300, 1) : 0;
+
+  // ground shadow for a bit of depth
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(x, y + 24, 13, 4, 0, 0, Math.PI * 2); ctx.fill();
+
+  // legs
+  ctx.strokeStyle = '#2a2a2a';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x - 5, y + 22); ctx.lineTo(x - 7, y + 34); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + 5, y + 22); ctx.lineTo(x + 7, y + 34); ctx.stroke();
+
+  // body
+  ctx.fillStyle = '#e8e8e8';
+  ctx.beginPath(); ctx.roundRect(x-13, y-6, 26, 28, 8); ctx.fill();
+  ctx.fillStyle = '#ffcf9c';
+  ctx.beginPath(); ctx.arc(x, y-16, 10, 0, Math.PI*2); ctx.fill();
+
+  // a smile after a wicket falls — small satisfaction from the fielding side
+  if ((now - umpireOutTime) < 1600) {
+    ctx.strokeStyle = '#7a4a2a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x, y - 14, 4, 0.15, Math.PI - 0.15);
+    ctx.stroke();
+  }
+
+  // arms + hands — clapping during a celebration, reaching for a catch,
+  // or resting, in that priority order
+  ctx.strokeStyle = '#e8e8e8';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  if (fiftyCelebration) {
+    const elapsed = performance.now() - fiftyCelebration.startTime;
+    const clapGap = 4 + Math.abs(Math.sin(elapsed / 110)) * 8; // hands open and close rhythmically
+    ctx.beginPath(); ctx.moveTo(x-8, y+2); ctx.lineTo(x-clapGap, y-6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+8, y+2); ctx.lineTo(x+clapGap, y-6); ctx.stroke();
+    ctx.fillStyle = '#ffcf9c';
+    ctx.beginPath(); ctx.arc(x-clapGap, y-6, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+clapGap, y-6, 3, 0, Math.PI*2); ctx.fill();
+  } else if (catching) {
+    const reach = -6 - catchProgress * 10; // hands rise and converge as the catch completes
+    const spread = 10 - catchProgress * 8;
+    ctx.beginPath(); ctx.moveTo(x-8, y+2); ctx.lineTo(x-spread, y+reach); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+8, y+2); ctx.lineTo(x+spread, y+reach); ctx.stroke();
+    ctx.fillStyle = '#ffcf9c';
+    ctx.beginPath(); ctx.arc(x-spread, y+reach, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+spread, y+reach, 3, 0, Math.PI*2); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.moveTo(x-8, y+2); ctx.lineTo(x-13, y+14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+8, y+2); ctx.lineTo(x+13, y+14); ctx.stroke();
+    ctx.fillStyle = '#ffcf9c';
+    ctx.beginPath(); ctx.arc(x-13, y+14, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+13, y+14, 3, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+function drawScoreboard(x, y) {
+  ctx.fillStyle = 'rgba(8,16,10,0.88)';
+  ctx.strokeStyle = '#8bc34a';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(x, y, 132, 46, 6); ctx.fill(); ctx.stroke();
+
+  ctx.fillStyle = '#8bc34a';
+  ctx.font = 'bold 10px "Courier New", monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('RUNS', x + 8, y + 16);
+  ctx.fillText('WKTS', x + 8, y + 36);
+
+  ctx.font = 'bold 17px "Courier New", monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(String(state.runs), x + 124, y + 18);
+  ctx.fillText(`${state.wickets}/3`, x + 124, y + 38);
+}
+
+let bowlingAnim = null; // { startTime } — the delivery arm swing, replayed each ball
+const BOWL_ANIM_DURATION = 460;
+
+function triggerBowlingAnim() {
+  bowlingAnim = { startTime: performance.now() };
+}
+
+function drawBowler(x, y) {
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(x, y + 24, 13, 4, 0, 0, Math.PI * 2); ctx.fill();
+
+  ctx.strokeStyle = '#2a2a2a';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x - 5, y + 22); ctx.lineTo(x - 7, y + 34); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + 5, y + 22); ctx.lineTo(x + 7, y + 34); ctx.stroke();
+
+  ctx.fillStyle = '#fb8500';
+  ctx.beginPath(); ctx.roundRect(x-14, y-6, 28, 30, 8); ctx.fill();
+  ctx.fillStyle = '#ffcf9c';
+  ctx.beginPath(); ctx.arc(x, y-16, 11, 0, Math.PI*2); ctx.fill();
+
+  // non-bowling arm, held steady at the side
+  ctx.strokeStyle = '#fb8500';
+  ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x-9, y-2); ctx.lineTo(x-13, y+12); ctx.stroke();
+  ctx.fillStyle = '#ffcf9c';
+  ctx.beginPath(); ctx.arc(x-13, y+12, 3, 0, Math.PI*2); ctx.fill();
+
+  let progress = 0;
+  if (bowlingAnim) {
+    const elapsed = performance.now() - bowlingAnim.startTime;
+    progress = elapsed / BOWL_ANIM_DURATION;
+    if (progress >= 1) { bowlingAnim = null; progress = 0; }
+  }
+  // Arm sweeps from cocked-back-and-high through to a forward follow-through,
+  // roughly tracing a real bowling action rather than a flat swing.
+  const restAngle = -2.5;
+  const releaseAngle = 0.7;
+  const eased = 1 - Math.pow(1 - Math.min(progress, 1), 2);
+  const angle = restAngle + eased * (releaseAngle - restAngle);
+
+  ctx.strokeStyle = '#fb8500';
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  const shoulderX = x + 9, shoulderY = y - 2, armLen = 20;
+  const handX = shoulderX + Math.cos(angle) * armLen, handY = shoulderY + Math.sin(angle) * armLen;
+  ctx.beginPath();
+  ctx.moveTo(shoulderX, shoulderY);
+  ctx.lineTo(handX, handY);
+  ctx.stroke();
+  ctx.fillStyle = '#ffcf9c';
+  ctx.beginPath(); ctx.arc(handX, handY, 3, 0, Math.PI*2); ctx.fill();
+}
+
+let umpireOutTime = 0; // timestamp of the last wicket — finger stays raised briefly after
+
+function drawUmpire(x, y, now) {
+  const raised = (now - umpireOutTime) < 1600;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(x, y + 22, 11, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+
+  ctx.strokeStyle = '#2a2a2a';
+  ctx.lineWidth = 4.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x - 4, y + 20); ctx.lineTo(x - 6, y + 30); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + 4, y + 20); ctx.lineTo(x + 6, y + 30); ctx.stroke();
+
+  // whites
+  ctx.fillStyle = '#f5f5f5';
+  ctx.beginPath(); ctx.roundRect(x-11, y-6, 22, 26, 7); ctx.fill();
+  ctx.fillStyle = '#ffcf9c';
+  ctx.beginPath(); ctx.arc(x, y-14, 9, 0, Math.PI*2); ctx.fill();
+  // wide hat
+  ctx.fillStyle = '#e8e8e8';
+  ctx.beginPath(); ctx.ellipse(x, y-19, 12, 3.5, 0, 0, Math.PI*2); ctx.fill();
+
+  // arm — raised with a pointing finger after a wicket, resting otherwise
+  ctx.strokeStyle = '#f5f5f5';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  if (raised) {
+    ctx.moveTo(x+7, y+2);
+    ctx.lineTo(x+12, y-22);
+    ctx.stroke();
+    ctx.fillStyle = '#ffcf9c';
+    ctx.beginPath(); ctx.arc(x+12, y-25, 2.5, 0, Math.PI*2); ctx.fill(); // finger tip
+  } else {
+    ctx.moveTo(x+7, y+2);
+    ctx.lineTo(x+11, y+15);
+    ctx.stroke();
+  }
+}
+
+/* =========================================================
+   BATTER + BAT SWING ANIMATION
+   ========================================================= */
+let swingAnim = null; // { startTime }
+const SWING_DURATION = 320;
+
+function triggerSwingAnim() {
+  swingAnim = { startTime: performance.now() };
+}
+
+function drawBatter(x, y) {
+  let celebrating = false, bounce = 0;
+  if (fiftyCelebration) {
+    celebrating = true;
+    const elapsed = performance.now() - fiftyCelebration.startTime;
+    bounce = Math.abs(Math.sin(elapsed / 130)) * -8; // quick triumphant hops
+    y += bounce;
+  }
+
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath(); ctx.ellipse(x, y + 25 - bounce, 14, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+
+  ctx.strokeStyle = '#e8d9b5'; // cream pads
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x - 6, y + 22); ctx.lineTo(x - 8, y + 34); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + 6, y + 22); ctx.lineTo(x + 8, y + 34); ctx.stroke();
+
+  // body
+  ctx.fillStyle = '#48cae4';
+  ctx.beginPath(); ctx.roundRect(x-14, y-6, 28, 30, 8); ctx.fill();
+
+  // blue helmet (replaces a bare head)
+  ctx.fillStyle = '#003f88';
+  ctx.beginPath(); ctx.arc(x, y-16, 12, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+  ctx.lineWidth = 1.5;
+  for (let gx = -6; gx <= 6; gx += 6) {
+    ctx.beginPath(); ctx.moveTo(x+gx, y-11); ctx.lineTo(x+gx, y-3); ctx.stroke();
+  }
+
+  // big smile during the celebration
+  if (celebrating) {
+    ctx.strokeStyle = '#7a4a2a';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.arc(x, y - 10, 4.5, 0.1, Math.PI - 0.1);
+    ctx.stroke();
+  }
+
+  // free arm — raised in celebration, resting otherwise
+  ctx.strokeStyle = '#48cae4';
+  ctx.lineWidth = 6; ctx.lineCap = 'round';
+  if (celebrating) {
+    ctx.beginPath(); ctx.moveTo(x-9, y-2); ctx.lineTo(x-15, y-20); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(x-9, y-2); ctx.lineTo(x-13, y+12); ctx.stroke();
+  }
+
+  let angle;
+  if (celebrating) {
+    // bat thrust overhead, with a small triumphant shake rather than a static hold
+    const elapsed = performance.now() - fiftyCelebration.startTime;
+    angle = -2.4 + Math.sin(elapsed / 90) * 0.12;
+  } else {
+    // bat — pivots from the batter's hands, swings toward the stumps on click
+    let progress = 0;
+    if (swingAnim) {
+      const elapsed = performance.now() - swingAnim.startTime;
+      progress = elapsed / SWING_DURATION;
+      if (progress >= 1) { swingAnim = null; progress = 0; }
+    }
+    const restAngle = -1.0; // resting angle, bat held back and down
+    const swingSweep = 1.9;
+    const eased = 1 - Math.pow(1 - Math.min(progress, 1), 3); // ease-out
+    angle = restAngle + eased * swingSweep;
+  }
+
+  const handX = x + 12, handY = y + 2;
+  ctx.save();
+  ctx.translate(handX, handY);
+  ctx.rotate(angle);
+  ctx.fillStyle = '#d9a86a'; // willow-brown bat
+  ctx.beginPath();
+  ctx.roundRect(-3, 0, 6, 8, 2); // handle
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(-5, 8, 10, 22, 4); // blade
+  ctx.fill();
+  ctx.restore();
+
+  if (fiftyCelebration) drawFiftySparkles(performance.now(), x, y - 20);
+}
+
+/* =========================================================
+   FIELDERS + POST-CONTACT BALL ANIMATION
+   ========================================================= */
+function getFielderPositions() {
+  const w = canvas.width;
+  return [
+    { x: w/2 - 150, y: 115 },
+    { x: w/2 + 150, y: 115 }
+  ];
+}
+
+let hitAnim = null; // { type, startTime, startX, startY, targetX, targetY, duration }
+
+function triggerHitAnim(type, startX, startY) {
+  const w = canvas.width;
+  let targetX, targetY, duration;
+
+  if (type === 'six') {
+    // Smashed hard and high, straight off the top of the screen
+    targetX = startX + (Math.random() < 0.5 ? -1 : 1) * (120 + Math.random() * 80);
+    targetY = -100;
+    duration = 420;
+  } else if (type === 'sixBoard') {
+    // The rare one — smashed straight into the scoreboard instead of over it
+    targetX = w - 76;
+    targetY = 33;
+    duration = 380;
+  } else if (type === 'four') {
+    // Off the screen too, but along the ground — noticeably less power than a six
+    const side = Math.random() < 0.5 ? -1 : 1;
+    targetX = side < 0 ? -60 : w + 60;
+    targetY = startY - 10 + (Math.random() * 30 - 15);
+    duration = 650;
+  } else if (type === 'runs') {
+    // A quick single/double — short dribble, stays on screen
+    targetX = startX + (Math.random() * 80 - 40);
+    targetY = startY + 50;
+    duration = 380;
+  } else if (type === 'caught') {
+    // Flies to whichever fielder — always caught, regardless of timing,
+    // since swinging at a wrong ball is the mistake here, not the shot itself
+    const fielders = getFielderPositions();
+    const fielderIndex = Math.floor(Math.random() * fielders.length);
+    const target = fielders[fielderIndex];
+    targetX = target.x; targetY = target.y;
+    duration = 460;
+    hitAnim = { type, startTime: performance.now(), startX, startY, targetX, targetY, duration, impactPlayed: false, fielderIndex };
+    return;
+  }
+
+  hitAnim = { type, startTime: performance.now(), startX, startY, targetX, targetY, duration, impactPlayed: false };
+}
+
+let screenShake = 0;
+let fielderCatchAnim = null; // { index, startTime } — brief catching pose after a caught dismissal
+
+function drawHitAnim(now) {
+  const elapsed = now - hitAnim.startTime;
+  let t = Math.min(elapsed / hitAnim.duration, 1);
+  t = (hitAnim.type === 'six' || hitAnim.type === 'sixBoard') ? t * t : 1 - Math.pow(1 - t, 2);
+
+  const x = hitAnim.startX + (hitAnim.targetX - hitAnim.startX) * t;
+  const y = hitAnim.startY + (hitAnim.targetY - hitAnim.startY) * t;
+
+  // Once a caught ball actually arrives, stop drawing the free ball and let
+  // the fielder's catch animation take over instead
+  const arrived = t >= 1;
+  if (!(hitAnim.type === 'caught' && arrived)) {
+    ctx.save();
+    ctx.globalAlpha = hitAnim.type === 'six' ? Math.max(1 - t * 0.4, 0.5) : 1;
+    ctx.fillStyle = '#8B0000';
+    ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  if (hitAnim.type === 'caught' && arrived && !hitAnim.impactPlayed) {
+    hitAnim.impactPlayed = true;
+    fielderCatchAnim = { index: hitAnim.fielderIndex, startTime: performance.now() };
+    playSound('catch');
+  }
+
+  if (hitAnim.type === 'sixBoard' && t >= 1 && !hitAnim.impactPlayed) {
+    hitAnim.impactPlayed = true;
+    screenShake = 14;
+    playSound('boardClang');
+    triggerFireworks(canvas.width - 76, 33);
+  }
+
+  if (elapsed > hitAnim.duration + (hitAnim.type === 'sixBoard' ? 120 : 0)) hitAnim = null;
+}
+
+/* =========================================================
+   SCOREBOARD FIREWORKS (electrical-damage flourish)
+   ========================================================= */
+let fireworks = null; // { startTime, particles }
+
+function triggerFireworks(x, y) {
+  const colors = ['#ffd60a', '#00d4ff', '#ff6b6b', '#ffffff'];
+  const particles = [];
+  for (let i = 0; i < 22; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.2 + Math.random() * 2.6;
+    particles.push({
+      x: 0, y: 0,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 0.6,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      life: 1
+    });
+  }
+  fireworks = { x, y, startTime: performance.now(), particles };
+}
+
+function drawFireworks(now) {
+  const elapsed = now - fireworks.startTime;
+  const dt = 16;
+  for (const p of fireworks.particles) {
+    p.x += p.vx * (dt * 0.06);
+    p.y += p.vy * (dt * 0.06);
+    p.vy += 0.06;
+    p.life -= 0.028;
+  }
+  ctx.save();
+  for (const p of fireworks.particles) {
+    if (p.life <= 0) continue;
+    ctx.globalAlpha = Math.max(p.life, 0);
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    ctx.arc(fireworks.x + p.x, fireworks.y + p.y, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  if (elapsed > 900) fireworks = null;
+}
+
+/* =========================================================
+   50-RUN CELEBRATION
+   ========================================================= */
+let fiftyCelebration = null; // { startTime, duration, sparkles: [...] }
+const FIFTY_CELEBRATION_DURATION = 1800;
+
+function triggerFiftyCelebration() {
+  const sparkles = [];
+  for (let i = 0; i < 16; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 0.6 + Math.random() * 1.4;
+    sparkles.push({
+      x: 0, y: 0,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 0.4,
+      life: 1
+    });
+  }
+  fiftyCelebration = { startTime: performance.now(), duration: FIFTY_CELEBRATION_DURATION, sparkles };
+  showResultFlash('FIFTY! 🎉', '#ffd60a');
+  playSound('clap');
+}
+
+function drawFiftySparkles(now, x, y) {
+  const elapsed = now - fiftyCelebration.startTime;
+  const dt = 16;
+  for (const p of fiftyCelebration.sparkles) {
+    p.x += p.vx * (dt * 0.06);
+    p.y += p.vy * (dt * 0.06);
+    p.life -= 0.02;
+  }
+  ctx.save();
+  for (const p of fiftyCelebration.sparkles) {
+    if (p.life <= 0) continue;
+    ctx.globalAlpha = Math.max(p.life, 0);
+    ctx.fillStyle = '#ffd60a';
+    ctx.shadowColor = '#ffd60a';
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    ctx.arc(x + p.x, y + p.y, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  if (elapsed > fiftyCelebration.duration) fiftyCelebration = null;
+}
+
+/* =========================================================
+   STUMPS + BOWLED ANIMATION
+   ========================================================= */
+function drawStumps(x, y) {
+  ctx.fillStyle = '#e8d9b5';
+  [-9, 0, 9].forEach(dx => {
+    ctx.fillRect(x + dx - 2, y - 26, 4, 26);
+  });
+  // bails resting on top
+  ctx.fillStyle = '#c9a86a';
+  ctx.fillRect(x - 11, y - 30, 9, 4);
+  ctx.fillRect(x - 1, y - 30, 9, 4);
+}
+
+let bowledAnim = null; // { startTime, particles: [{x,y,vx,vy,rot,vrot}] }
+
+function triggerBowledAnimation(x, y) {
+  const particles = [];
+  // two bails flying off
+  [-1, 1].forEach(dir => {
+    particles.push({
+      x: x + dir * 5, y: y - 28,
+      vx: dir * (1.4 + Math.random() * 0.8), vy: -2.6 - Math.random() * 0.6,
+      rot: 0, vrot: dir * 0.25, w: 9, h: 4, color: '#c9a86a'
+    });
+  });
+  // three stumps toppling outward
+  [-9, 0, 9].forEach((dx, i) => {
+    const dir = dx === 0 ? (Math.random() < 0.5 ? -1 : 1) : Math.sign(dx);
+    particles.push({
+      x: x + dx, y: y - 13,
+      vx: dir * (0.6 + Math.random() * 0.5), vy: -0.8 - Math.random() * 0.4,
+      rot: 0, vrot: dir * 0.12, w: 4, h: 26, color: '#e8d9b5', isStump: true, pivotY: y
+    });
+  });
+  bowledAnim = { startTime: performance.now(), particles };
+}
+
+function drawBowledAnimation(now) {
+  const elapsed = now - bowledAnim.startTime;
+  const dt = 16; // approx frame step for simple physics
+  for (const p of bowledAnim.particles) {
+    p.x += p.vx * (dt * 0.06);
+    p.y += p.vy * (dt * 0.06);
+    p.vy += 0.09; // gravity
+    p.rot += p.vrot;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+    ctx.restore();
+  }
+  if (elapsed > 1100) bowledAnim = null;
+}
+
+/* =========================================================
+   GAME OVER
+   ========================================================= */
+function endInnings() {
+  state.running = false;
+  playSound('gameover');
+  const acc = state.attempts > 0 ? Math.round((state.correctHits / state.attempts) * 100) : 0;
+  document.getElementById('finalRuns').textContent = `${state.runs} runs`;
+  document.getElementById('finalAccuracy').textContent = `Accuracy: ${acc}%`;
+  showScreen('overScreen');
+}
+</script>
+</body>
+</html>
