@@ -132,65 +132,57 @@
    ========================================================= */
 const LEVELS = [
   {
-    name: "Level 1: Word Starters",
+    name: "Level 1: Vowel Voyagers",
     items: [
-      { affix: "re–", type: "prefix", meaning: "again / back" },
-      { affix: "un–", type: "prefix", meaning: "not / opposite of" },
-      { affix: "pre–", type: "prefix", meaning: "before" },
-      { affix: "dis–", type: "prefix", meaning: "not / opposite / away" },
-      { affix: "–ful", type: "suffix", meaning: "full of" },
-      { affix: "–less", type: "suffix", meaning: "without" },
-      { affix: "tele–", type: "root", meaning: "far / distant" },
-      { affix: "auto–", type: "root", meaning: "self" },
-      { affix: "bio–", type: "root", meaning: "life" },
-      { affix: "sub–", type: "prefix", meaning: "under / below" }
+      { affix: "ea in break", type: "spelling", meaning: "long a sound, like in \"break\"" },
+      { affix: "y in baby", type: "spelling", meaning: "long e sound, like in \"baby\"" },
+      { affix: "igh in night", type: "spelling", meaning: "long i sound" },
+      { affix: "oe in toe", type: "spelling", meaning: "long o sound" },
+      { affix: "ew in grew", type: "spelling", meaning: "\"oo\" sound (as in \"mood\")" },
+      { affix: "ue in true", type: "spelling", meaning: "long u sound" },
+      { affix: "aw in saw", type: "spelling", meaning: "\"or\" sound" },
+      { affix: "soft c in city", type: "spelling", meaning: "s sound (soft c)" },
+      { affix: "soft g in giant", type: "spelling", meaning: "j sound (soft g)" }
     ]
   },
   {
-    name: "Level 2: Prefix Power",
+    name: "Level 2: Word Sparks",
     items: [
-      { affix: "inter–", type: "prefix", meaning: "between / among" },
-      { affix: "over–", type: "prefix", meaning: "too much / above" },
-      { affix: "circum–", type: "prefix", meaning: "around" },
-      { affix: "contra–", type: "prefix", meaning: "against" },
-      { affix: "ambi–", type: "prefix", meaning: "both" },
-      { affix: "ante–", type: "prefix", meaning: "before (formal, e.g. \"antenatal\")" },
-      { affix: "anti–", type: "prefix", meaning: "against / opposite" },
-      { affix: "–able", type: "suffix", meaning: "capable of / able to be" },
-      { affix: "–ible", type: "suffix", meaning: "capable of / able to be (usually on Latin word roots)" },
-      { affix: "–ure", type: "suffix", meaning: "the act/result of, or state of" }
+      { affix: "–est", type: "suffix", meaning: "the most (superlative), e.g. \"biggest\"" },
+      { affix: "mis–", type: "prefix", meaning: "wrongly / badly" },
+      { affix: "multi–", type: "prefix", meaning: "many (Latin origin, e.g. \"multicultural\")" },
+      { affix: "–tion", type: "suffix", meaning: "turns a verb into a noun (an action or process), e.g. \"action\"" },
+      { affix: "–sion", type: "suffix", meaning: "turns a verb into a noun (used after l, s, or ss), e.g. \"expansion\"" },
+      { affix: "–cian", type: "suffix", meaning: "a person who practises or performs something, e.g. \"musician\"" },
+      { affix: "–logy", type: "suffix", meaning: "the study of" },
+      { affix: "–ism", type: "suffix", meaning: "a belief, practice, or system" },
+      { affix: "–ment", type: "suffix", meaning: "the result of an action, added to a verb, e.g. \"argument\"" }
     ]
   },
   {
-    name: "Level 3: Number Ninjas",
+    name: "Level 3: Hidden Letter Hunters",
     items: [
-      { affix: "uni–", type: "root", meaning: "one" },
-      { affix: "bi–", type: "root", meaning: "two" },
-      { affix: "tri–", type: "root", meaning: "three" },
-      { affix: "quad–", type: "root", meaning: "four" },
-      { affix: "pent–", type: "root", meaning: "five" },
-      { affix: "hex–", type: "root", meaning: "six" },
-      { affix: "sept–", type: "root", meaning: "seven" },
-      { affix: "oct–", type: "root", meaning: "eight" },
-      { affix: "non–", type: "root", meaning: "nine" },
-      { affix: "dec–", type: "root", meaning: "ten" },
-      { affix: "cent–", type: "root", meaning: "hundred" },
-      { affix: "milli–", type: "root", meaning: "thousand" },
-      { affix: "semi–", type: "root", meaning: "half" },
-      { affix: "poly–", type: "root", meaning: "many" }
+      { affix: "kn in knee", type: "spelling", meaning: "n sound (k is silent)" },
+      { affix: "mb in lamb", type: "spelling", meaning: "m sound (b is silent)" },
+      { affix: "sc in scissors", type: "spelling", meaning: "s sound (c is silent)" },
+      { affix: "wr in write", type: "spelling", meaning: "r sound (w is silent)" },
+      { affix: "are in care", type: "spelling", meaning: "\"air\" sound, like in \"care\"", cluster: "air-sound" },
+      { affix: "ear in bear", type: "spelling", meaning: "\"air\" sound, like in \"bear\"", cluster: "air-sound" },
+      { affix: "air in chair", type: "spelling", meaning: "\"air\" sound, like in \"chair\"", cluster: "air-sound" }
     ]
   },
   {
-    name: "Level 4: Shape-Shifters",
+    name: "Level 4: Word Twisters",
     items: [
-      { affix: "in–", type: "prefix", meaning: "not" },
-      { affix: "im–", type: "prefix", meaning: "not (before b/m/p)" },
-      { affix: "il–", type: "prefix", meaning: "not (before l)" },
-      { affix: "ir–", type: "prefix", meaning: "not (before r)" },
-      { affix: "con–", type: "prefix", meaning: "with / together" },
-      { affix: "col–", type: "prefix", meaning: "with / together (before l)" },
-      { affix: "com–", type: "prefix", meaning: "with / together (before b/m/p)" },
-      { affix: "cor–", type: "prefix", meaning: "with / together (before r)" }
+      { affix: "hop → hopping", type: "spelling", meaning: "the final consonant doubles before the suffix, like in \"hopping\"", cluster: "consonant-doubling" },
+      { affix: "swim → swimming", type: "spelling", meaning: "the final consonant doubles before the suffix, like in \"swimming\"", cluster: "consonant-doubling" },
+      { affix: "run → running", type: "spelling", meaning: "the final consonant doubles before the suffix, like in \"running\"", cluster: "consonant-doubling" },
+      { affix: "baby → babies", type: "spelling", meaning: "the y changes to i before the suffix, like in \"babies\"", cluster: "y-to-i" },
+      { affix: "happy → happiest", type: "spelling", meaning: "the y changes to i before the suffix, like in \"happiest\"", cluster: "y-to-i" },
+      { affix: "try → tries", type: "spelling", meaning: "the y changes to i before the suffix, like in \"tries\"", cluster: "y-to-i" },
+      { affix: "leaf → leaves", type: "spelling", meaning: "the f changes to ves before the suffix, like in \"leaves\"", cluster: "f-to-ves" },
+      { affix: "knife → knives", type: "spelling", meaning: "the f changes to ves before the suffix, like in \"knives\"", cluster: "f-to-ves" },
+      { affix: "wolf → wolves", type: "spelling", meaning: "the f changes to ves before the suffix, like in \"wolves\"", cluster: "f-to-ves" }
     ]
   },
   {
@@ -245,7 +237,69 @@ const LEVELS = [
     ]
   },
   {
-    name: "Level 6: Sound Tricksters",
+    name: "Level 6: Word Starters",
+    items: [
+      { affix: "re–", type: "prefix", meaning: "again / back" },
+      { affix: "un–", type: "prefix", meaning: "not / opposite of" },
+      { affix: "pre–", type: "prefix", meaning: "before" },
+      { affix: "dis–", type: "prefix", meaning: "not / opposite / away" },
+      { affix: "–ful", type: "suffix", meaning: "full of" },
+      { affix: "–less", type: "suffix", meaning: "without" },
+      { affix: "tele–", type: "root", meaning: "far / distant" },
+      { affix: "auto–", type: "root", meaning: "self" },
+      { affix: "bio–", type: "root", meaning: "life" },
+      { affix: "sub–", type: "prefix", meaning: "under / below" }
+    ]
+  },
+  {
+    name: "Level 7: Prefix Power",
+    items: [
+      { affix: "inter–", type: "prefix", meaning: "between / among" },
+      { affix: "over–", type: "prefix", meaning: "too much / above" },
+      { affix: "circum–", type: "prefix", meaning: "around" },
+      { affix: "contra–", type: "prefix", meaning: "against" },
+      { affix: "ambi–", type: "prefix", meaning: "both" },
+      { affix: "ante–", type: "prefix", meaning: "before (formal, e.g. \"antenatal\")" },
+      { affix: "anti–", type: "prefix", meaning: "against / opposite" },
+      { affix: "–able", type: "suffix", meaning: "capable of / able to be" },
+      { affix: "–ible", type: "suffix", meaning: "capable of / able to be (usually on Latin word roots)" },
+      { affix: "–ure", type: "suffix", meaning: "the act/result of, or state of" }
+    ]
+  },
+  {
+    name: "Level 8: Number Ninjas",
+    items: [
+      { affix: "uni–", type: "root", meaning: "one" },
+      { affix: "bi–", type: "root", meaning: "two" },
+      { affix: "tri–", type: "root", meaning: "three" },
+      { affix: "quad–", type: "root", meaning: "four" },
+      { affix: "pent–", type: "root", meaning: "five" },
+      { affix: "hex–", type: "root", meaning: "six" },
+      { affix: "sept–", type: "root", meaning: "seven" },
+      { affix: "oct–", type: "root", meaning: "eight" },
+      { affix: "non–", type: "root", meaning: "nine" },
+      { affix: "dec–", type: "root", meaning: "ten" },
+      { affix: "cent–", type: "root", meaning: "hundred" },
+      { affix: "milli–", type: "root", meaning: "thousand" },
+      { affix: "semi–", type: "root", meaning: "half" },
+      { affix: "poly–", type: "root", meaning: "many" }
+    ]
+  },
+  {
+    name: "Level 9: Shape-Shifters",
+    items: [
+      { affix: "in–", type: "prefix", meaning: "not" },
+      { affix: "im–", type: "prefix", meaning: "not (before b/m/p)" },
+      { affix: "il–", type: "prefix", meaning: "not (before l)" },
+      { affix: "ir–", type: "prefix", meaning: "not (before r)" },
+      { affix: "con–", type: "prefix", meaning: "with / together" },
+      { affix: "col–", type: "prefix", meaning: "with / together (before l)" },
+      { affix: "com–", type: "prefix", meaning: "with / together (before b/m/p)" },
+      { affix: "cor–", type: "prefix", meaning: "with / together (before r)" }
+    ]
+  },
+  {
+    name: "Level 10: Sound Tricksters",
     items: [
       { affix: "ei in reign", type: "spelling", meaning: "long a sound" },
       { affix: "ei in ceiling", type: "spelling", meaning: "long e sound" },
@@ -258,7 +312,7 @@ const LEVELS = [
     ]
   },
   {
-    name: "Level 7: Silent Letter Detectives",
+    name: "Level 11: Silent Letter Detectives",
     items: [
       { affix: "gn in sign", type: "spelling", meaning: "n sound (g is silent)" },
       { affix: "gh in ghost", type: "spelling", meaning: "g sound (h is silent)" },
