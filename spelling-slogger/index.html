@@ -52,6 +52,7 @@
     <select id="levelSelect" style="width:100%; padding:10px; margin-bottom:14px; background:var(--bg-dark); color:var(--text); border:1px solid #444; border-radius:8px;"></select>
     <button class="primary" id="classicBtn">🏏 Classic Innings (3 wickets)</button>
     <button class="secondary" id="scenarioBtn" style="width:100%; margin-top:10px; padding:12px;">🎯 Scenario Mode</button>
+    <button class="secondary" id="extremeBtn" style="width:100%; margin-top:10px; padding:12px; border-color:#ef476f;">🔥 Extreme Scenario Mode</button>
   </div>
 </div>
 
@@ -60,7 +61,8 @@
   <h1>🎯 Today's Scenario</h1>
   <div class="card" style="text-align:center;">
     <div class="big" id="scenarioTitle" style="font-size:1.6em; color:var(--accent); font-weight:bold; margin-bottom:10px;"></div>
-    <div class="stat" id="scenarioDescription" style="margin-bottom:20px;"></div>
+    <div class="stat" id="scenarioDescription" style="margin-bottom:8px;"></div>
+    <div id="scenarioExtremeNote" class="hidden" style="color:#ef476f; font-weight:bold; margin-bottom:20px;">🔥 Extreme: questions from every level, all mixed together!</div>
     <button class="primary" id="scenarioGoBtn">Let's Go!</button>
   </div>
 </div>
@@ -131,7 +133,7 @@ const LEVELS = [
       { affix: "circum–", type: "prefix", meaning: "around" },
       { affix: "contra–", type: "prefix", meaning: "against" },
       { affix: "ambi–", type: "prefix", meaning: "both" },
-      { affix: "ante–", type: "prefix", meaning: "before" },
+      { affix: "ante–", type: "prefix", meaning: "before (formal, e.g. \"antenatal\")" },
       { affix: "anti–", type: "prefix", meaning: "against / opposite" },
       { affix: "–able", type: "suffix", meaning: "capable of / able to be" },
       { affix: "–ible", type: "suffix", meaning: "capable of / able to be (usually on Latin word roots)" },
@@ -220,6 +222,11 @@ const LEVELS = [
    Each has its own win/loss condition, wicket count, and pace
    modifier — the difficulty levers requested. One is picked at
    random each time Scenario Mode is chosen.
+
+   difficulty: 1 (easiest) to 6 (hardest) — formalizes the ranking
+   we agreed on, ready for the progression system built on top of
+   this next. Purely metadata for now; doesn't affect gameplay
+   itself yet.
    ========================================================= */
 const SCENARIOS = [
   {
@@ -229,16 +236,8 @@ const SCENARIOS = [
     type: 'survive',
     balls: 8,
     wickets: 3,
-    paceModifier: 1.0
-  },
-  {
-    id: 'survive-hard',
-    title: "Backs Against the Wall",
-    description: "Survive 12 deliveries with just 2 wickets in hand, against a faster bowler.",
-    type: 'survive',
-    balls: 12,
-    wickets: 2,
-    paceModifier: 1.15 // faster bowling — shorter time to react
+    paceModifier: 1.0,
+    difficulty: 1
   },
   {
     id: 'chase-gentle',
@@ -248,7 +247,18 @@ const SCENARIOS = [
     balls: 10,
     targetRuns: 15,
     wickets: 3,
-    paceModifier: 1.0
+    paceModifier: 1.0,
+    difficulty: 2
+  },
+  {
+    id: 'survive-hard',
+    title: "Backs Against the Wall",
+    description: "Survive 12 deliveries with just 2 wickets in hand, against a faster bowler.",
+    type: 'survive',
+    balls: 12,
+    wickets: 2,
+    paceModifier: 1.15, // faster bowling — shorter time to react
+    difficulty: 3
   },
   {
     id: 'chase-aggressive',
@@ -258,7 +268,8 @@ const SCENARIOS = [
     balls: 10,
     targetRuns: 38,
     wickets: 3,
-    paceModifier: 1.05
+    paceModifier: 1.05,
+    difficulty: 4
   },
   {
     id: 'chase-death-overs',
@@ -268,7 +279,29 @@ const SCENARIOS = [
     balls: 6,
     targetRuns: 20,
     wickets: 2,
-    paceModifier: 1.2
+    paceModifier: 1.2,
+    difficulty: 5
+  },
+  {
+    id: 'survive-last-man',
+    title: "Last Man Standing",
+    description: "Survive 16 deliveries with just one wicket in hand — no one left to come in after you.",
+    type: 'survive',
+    balls: 16,
+    wickets: 1,
+    paceModifier: 1.15,
+    difficulty: 6
+  },
+  {
+    id: 'chase-wagging-tail',
+    title: "A Wagging Tail",
+    description: "Score 25 runs off 9 balls with only one wicket standing — make it wag!",
+    type: 'chase',
+    balls: 9,
+    targetRuns: 25,
+    wickets: 1,
+    paceModifier: 1.1,
+    difficulty: 6
   }
 ];
 
@@ -492,6 +525,7 @@ let state = {
   paused: false,
   mode: 'classic', // 'classic' | 'scenario'
   scenario: null,  // the picked scenario object when mode === 'scenario'
+  extremeContent: false, // Extreme Scenario Mode — pulls from every level, not just levelIndex
   ballsFaced: 0,
   currentQuestion: null, // { item, ballOrder: [correctIdx placement], ballIndex }
   usedItems: [],
@@ -541,16 +575,30 @@ document.getElementById('classicBtn').addEventListener('click', () => {
   state.levelIndex = parseInt(document.getElementById('levelSelect').value, 10);
   state.mode = 'classic';
   state.scenario = null;
+  state.extremeContent = false;
   startInnings();
 });
 
 document.getElementById('scenarioBtn').addEventListener('click', () => {
   initAudio();
   state.levelIndex = parseInt(document.getElementById('levelSelect').value, 10);
+  state.extremeContent = false;
   const picked = SCENARIOS[Math.floor(Math.random() * SCENARIOS.length)];
   state.scenario = picked;
   document.getElementById('scenarioTitle').textContent = picked.title;
   document.getElementById('scenarioDescription').textContent = picked.description;
+  document.getElementById('scenarioExtremeNote').classList.add('hidden');
+  showScreen('scenarioBriefingScreen');
+});
+
+document.getElementById('extremeBtn').addEventListener('click', () => {
+  initAudio();
+  state.extremeContent = true; // pulls questions from every level, not just the selected one
+  const picked = SCENARIOS[Math.floor(Math.random() * SCENARIOS.length)];
+  state.scenario = picked;
+  document.getElementById('scenarioTitle').textContent = picked.title;
+  document.getElementById('scenarioDescription').textContent = picked.description;
+  document.getElementById('scenarioExtremeNote').classList.remove('hidden');
   showScreen('scenarioBriefingScreen');
 });
 
@@ -618,7 +666,7 @@ function startInnings() {
 function updateHud() {
   document.getElementById('runsDisplay').textContent = `Runs: ${state.runs}`;
   document.getElementById('wicketsDisplay').textContent = 'Wickets: ' + '🏏'.repeat(state.wickets) + '❌'.repeat(state.startingWickets - state.wickets);
-  document.getElementById('levelDisplay').textContent = LEVELS[state.levelIndex].name.split(':')[0];
+  document.getElementById('levelDisplay').textContent = state.extremeContent ? '🔥 Extreme (all levels)' : LEVELS[state.levelIndex].name.split(':')[0];
   if (state.mode === 'scenario' && state.scenario) {
     const s = state.scenario;
     const progressText = s.type === 'chase'
@@ -632,13 +680,16 @@ function updateHud() {
    QUESTION / BALL SEQUENCE
    ========================================================= */
 function nextQuestion() {
-  const level = LEVELS[state.levelIndex];
-  let pool = level.items.filter(i => !state.usedItems.includes(i.affix));
-  if (pool.length === 0) { state.usedItems = []; pool = level.items; }
+  // Extreme Scenario Mode pools every level's items together; everything
+  // else draws only from the level picked on the start screen.
+  const allItems = state.extremeContent ? LEVELS.flatMap(l => l.items) : LEVELS[state.levelIndex].items;
+
+  let pool = allItems.filter(i => !state.usedItems.includes(i.affix));
+  if (pool.length === 0) { state.usedItems = []; pool = allItems; }
   const item = pool[Math.floor(Math.random() * pool.length)];
   state.usedItems.push(item.affix);
 
-  const others = level.items.filter(i => i.affix !== item.affix);
+  const others = allItems.filter(i => i.affix !== item.affix);
   const shuffledOthers = [...others].sort(() => Math.random() - 0.5).slice(0, 2);
   const balls = [item.affix, shuffledOthers[0].affix, shuffledOthers[1].affix]
     .map((affix, idx) => ({ affix, correct: affix === item.affix }))
