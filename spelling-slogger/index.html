@@ -51,7 +51,17 @@
     <label style="display:block; margin-bottom:8px;">Choose your level</label>
     <select id="levelSelect" style="width:100%; padding:10px; margin-bottom:14px; background:var(--bg-dark); color:var(--text); border:1px solid #444; border-radius:8px;"></select>
     <button class="primary" id="classicBtn">🏏 Classic Innings (3 wickets)</button>
-    <button class="secondary" id="scenarioBtn" disabled style="width:100%; margin-top:10px; padding:12px;">🎯 Scenario Mode (coming soon)</button>
+    <button class="secondary" id="scenarioBtn" style="width:100%; margin-top:10px; padding:12px;">🎯 Scenario Mode</button>
+  </div>
+</div>
+
+<!-- SCENARIO BRIEFING SCREEN -->
+<div class="screen hidden" id="scenarioBriefingScreen">
+  <h1>🎯 Today's Scenario</h1>
+  <div class="card" style="text-align:center;">
+    <div class="big" id="scenarioTitle" style="font-size:1.6em; color:var(--accent); font-weight:bold; margin-bottom:10px;"></div>
+    <div class="stat" id="scenarioDescription" style="margin-bottom:20px;"></div>
+    <button class="primary" id="scenarioGoBtn">Let's Go!</button>
   </div>
 </div>
 
@@ -61,6 +71,7 @@
     <span id="runsDisplay">Runs: 0</span>
     <span id="wicketsDisplay">Wickets: 🏏🏏🏏</span>
     <span id="levelDisplay">Level 1</span>
+    <span id="scenarioProgress" class="hidden">Ball 1/10</span>
   </div>
   <div id="clueBar">...</div>
   <div id="ballLabel" style="width:100%; text-align:center; font-size:1.4em; font-weight:bold; color:#ffd60a; min-height:1.3em;"></div>
@@ -76,8 +87,9 @@
 
 <!-- GAME OVER SCREEN -->
 <div class="screen hidden" id="overScreen">
-  <h1>🏏 All Out!</h1>
+  <h1 id="overScreenTitle">🏏 All Out!</h1>
   <div class="card" style="text-align:center;">
+    <div class="stat" id="scenarioResultMessage"></div>
     <div class="stat">Final score</div>
     <div class="big" id="finalRuns">0 runs</div>
     <div class="stat" id="finalAccuracy">Accuracy: 0%</div>
@@ -200,6 +212,63 @@ const LEVELS = [
       { affix: "rh in rhythm", type: "spelling", meaning: "r sound (h is silent)" },
       { affix: "pt in receipt", type: "spelling", meaning: "t sound (p is silent)" }
     ]
+  }
+];
+
+/* =========================================================
+   SCENARIOS
+   Each has its own win/loss condition, wicket count, and pace
+   modifier — the difficulty levers requested. One is picked at
+   random each time Scenario Mode is chosen.
+   ========================================================= */
+const SCENARIOS = [
+  {
+    id: 'survive-easy',
+    title: "Bat Out the Day",
+    description: "Survive 8 deliveries without losing all your wickets.",
+    type: 'survive',
+    balls: 8,
+    wickets: 3,
+    paceModifier: 1.0
+  },
+  {
+    id: 'survive-hard',
+    title: "Backs Against the Wall",
+    description: "Survive 12 deliveries with just 2 wickets in hand, against a faster bowler.",
+    type: 'survive',
+    balls: 12,
+    wickets: 2,
+    paceModifier: 1.15 // faster bowling — shorter time to react
+  },
+  {
+    id: 'chase-gentle',
+    title: "Steady Chase",
+    description: "Score 15 runs off 10 balls.",
+    type: 'chase',
+    balls: 10,
+    targetRuns: 15,
+    wickets: 3,
+    paceModifier: 1.0
+  },
+  {
+    id: 'chase-aggressive',
+    title: "Thrilling Run Chase",
+    description: "Smash 38 runs off just 10 balls!",
+    type: 'chase',
+    balls: 10,
+    targetRuns: 38,
+    wickets: 3,
+    paceModifier: 1.05
+  },
+  {
+    id: 'chase-death-overs',
+    title: "Death Overs Dash",
+    description: "20 runs needed off just 6 balls, and the bowling is quick.",
+    type: 'chase',
+    balls: 6,
+    targetRuns: 20,
+    wickets: 2,
+    paceModifier: 1.2
   }
 ];
 
@@ -421,6 +490,9 @@ let state = {
   correctHits: 0,
   running: false,
   paused: false,
+  mode: 'classic', // 'classic' | 'scenario'
+  scenario: null,  // the picked scenario object when mode === 'scenario'
+  ballsFaced: 0,
   currentQuestion: null, // { item, ballOrder: [correctIdx placement], ballIndex }
   usedItems: [],
   ball: null, // { releaseTime, duration, resolved, swung }
@@ -434,7 +506,7 @@ const clueBarEl = document.getElementById('clueBar');
    SCREENS
    ========================================================= */
 function showScreen(id) {
-  ['startScreen','gameScreen','overScreen'].forEach(s => {
+  ['startScreen','scenarioBriefingScreen','gameScreen','overScreen'].forEach(s => {
     document.getElementById(s).classList.toggle('hidden', s !== id);
   });
   document.getElementById('pauseBtn').classList.toggle('hidden', id !== 'gameScreen');
@@ -467,8 +539,26 @@ populateLevelSelect();
 document.getElementById('classicBtn').addEventListener('click', () => {
   initAudio();
   state.levelIndex = parseInt(document.getElementById('levelSelect').value, 10);
+  state.mode = 'classic';
+  state.scenario = null;
   startInnings();
 });
+
+document.getElementById('scenarioBtn').addEventListener('click', () => {
+  initAudio();
+  state.levelIndex = parseInt(document.getElementById('levelSelect').value, 10);
+  const picked = SCENARIOS[Math.floor(Math.random() * SCENARIOS.length)];
+  state.scenario = picked;
+  document.getElementById('scenarioTitle').textContent = picked.title;
+  document.getElementById('scenarioDescription').textContent = picked.description;
+  showScreen('scenarioBriefingScreen');
+});
+
+document.getElementById('scenarioGoBtn').addEventListener('click', () => {
+  state.mode = 'scenario';
+  startInnings();
+});
+
 document.getElementById('retryBtn').addEventListener('click', () => showScreen('startScreen'));
 
 /* =========================================================
@@ -500,7 +590,9 @@ document.getElementById('quitToMenuBtn').addEventListener('click', () => {
    ========================================================= */
 function startInnings() {
   state.runs = 0;
-  state.wickets = 3;
+  state.startingWickets = (state.mode === 'scenario' && state.scenario) ? state.scenario.wickets : 3;
+  state.wickets = state.startingWickets;
+  state.ballsFaced = 0;
   state.attempts = 0;
   state.correctHits = 0;
   state.sixCount = 0;
@@ -515,6 +607,7 @@ function startInnings() {
   state.running = true;
   state.paused = false;
   document.getElementById('pauseOverlay').classList.add('hidden');
+  document.getElementById('scenarioProgress').classList.toggle('hidden', state.mode !== 'scenario');
   updateHud();
   showScreen('gameScreen');
   nextQuestion();
@@ -524,8 +617,15 @@ function startInnings() {
 
 function updateHud() {
   document.getElementById('runsDisplay').textContent = `Runs: ${state.runs}`;
-  document.getElementById('wicketsDisplay').textContent = 'Wickets: ' + '🏏'.repeat(state.wickets) + '❌'.repeat(3 - state.wickets);
+  document.getElementById('wicketsDisplay').textContent = 'Wickets: ' + '🏏'.repeat(state.wickets) + '❌'.repeat(state.startingWickets - state.wickets);
   document.getElementById('levelDisplay').textContent = LEVELS[state.levelIndex].name.split(':')[0];
+  if (state.mode === 'scenario' && state.scenario) {
+    const s = state.scenario;
+    const progressText = s.type === 'chase'
+      ? `Ball ${state.ballsFaced}/${s.balls} — need ${Math.max(s.targetRuns - state.runs, 0)} more`
+      : `Ball ${state.ballsFaced}/${s.balls}`;
+    document.getElementById('scenarioProgress').textContent = progressText;
+  }
 }
 
 /* =========================================================
@@ -560,7 +660,10 @@ function bowlNextBall() {
     return;
   }
   const ballData = q.balls[q.ballIndex];
-  const baseDuration = 2400;
+  // Scenario Mode can make the whole innings faster-paced (a difficulty
+  // lever), applied as a baseline before the per-ball random variation.
+  const scenarioPace = (state.mode === 'scenario' && state.scenario) ? state.scenario.paceModifier : 1.0;
+  const baseDuration = 2400 / scenarioPace;
   // Occasional pace variation, like a real bowler mixing things up —
   // a slower ball to buy the batter more time, or a quicker one to rush
   // them. Everything downstream (resolve window, turn timing, colour
@@ -655,6 +758,7 @@ function resolveBall(swung, zone) {
   if (ball.resolved) return;
   ball.resolved = true;
   state.attempts++;
+  state.ballsFaced++; // every delivery counts toward a scenario's ball limit, whatever the outcome
   document.getElementById('ballLabel').textContent = '';
 
   if (!swung) {
@@ -706,7 +810,46 @@ function resolveBall(swung, zone) {
   advanceBallOrQuestion(true, extraDelay);
 }
 
+// Checked after every ball resolves. Returns true (and has already shown
+// the result screen) if a scenario has just concluded — win or lose —
+// so the caller knows to skip its normal continue-playing logic.
+function checkScenarioEnd() {
+  if (state.mode !== 'scenario' || !state.scenario) return false;
+  const s = state.scenario;
+
+  if (s.type === 'chase' && state.runs >= s.targetRuns) {
+    setTimeout(() => runWhenUnpaused(() => endScenario(true, `Target reached! ${state.runs}/${s.targetRuns} runs.`)), 900);
+    return true;
+  }
+  if (state.wickets <= 0) {
+    const msg = s.type === 'chase' ? 'All out — target not reached.' : 'All out before surviving the day.';
+    setTimeout(() => runWhenUnpaused(() => endScenario(false, msg)), 1000);
+    return true;
+  }
+  if (state.ballsFaced >= s.balls) {
+    if (s.type === 'survive') {
+      setTimeout(() => runWhenUnpaused(() => endScenario(true, `You survived all ${s.balls} deliveries!`)), 900);
+    } else {
+      setTimeout(() => runWhenUnpaused(() => endScenario(false, `Out of balls — ${state.runs}/${s.targetRuns} runs.`)), 900);
+    }
+    return true;
+  }
+  return false;
+}
+
+function endScenario(won, message) {
+  state.running = false;
+  playSound(won ? 'clap' : 'gameover');
+  const acc = state.attempts > 0 ? Math.round((state.correctHits / state.attempts) * 100) : 0;
+  document.getElementById('overScreenTitle').textContent = won ? '🏆 Scenario Complete!' : '💔 Scenario Failed';
+  document.getElementById('scenarioResultMessage').textContent = message;
+  document.getElementById('finalRuns').textContent = `${state.runs} runs`;
+  document.getElementById('finalAccuracy').textContent = `Accuracy: ${acc}%`;
+  showScreen('overScreen');
+}
+
 function advanceBallOrQuestion(questionResolved, extraDelay) {
+  if (checkScenarioEnd()) return; // scenario just concluded — don't continue as normal
   if (questionResolved) {
     setTimeout(() => runWhenUnpaused(nextQuestion), 900 + (extraDelay || 0));
   } else {
@@ -730,6 +873,7 @@ function wicketFalls(label, isBowled) {
   state.runsAtLastWicket = state.runs;
   state.hasCelebrated50 = false;
   updateHud();
+  if (checkScenarioEnd()) return; // scenario just concluded — don't continue as normal
   if (state.wickets <= 0) {
     setTimeout(() => runWhenUnpaused(endInnings), 1000);
   } else {
@@ -1428,6 +1572,8 @@ function endInnings() {
   state.running = false;
   playSound('gameover');
   const acc = state.attempts > 0 ? Math.round((state.correctHits / state.attempts) * 100) : 0;
+  document.getElementById('overScreenTitle').textContent = '🏏 All Out!';
+  document.getElementById('scenarioResultMessage').textContent = '';
   document.getElementById('finalRuns').textContent = `${state.runs} runs`;
   document.getElementById('finalAccuracy').textContent = `Accuracy: ${acc}%`;
   showScreen('overScreen');
