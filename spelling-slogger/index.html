@@ -597,7 +597,7 @@ function toggleMute() {
   // doesn't keep playing through a mute toggle mid-track.
   musicTrackAudio.volume = muted ? 0 : 0.5;
 }
-document.getElementById('muteBtn').addEventListener('click', () => { initAudio(); toggleMute(); });
+document.getElementById('muteBtn').addEventListener('click', () => { toggleMute(); initAudio(); });
 
 /* =========================================================
    FULLSCREEN TOGGLE
