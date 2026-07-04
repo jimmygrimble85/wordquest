@@ -479,11 +479,24 @@ function initAudio() {
    from oscillators we own outright rather than any existing
    recording. Plays on the start/briefing/how-to-play/game-over
    screens, stops the moment an innings actually begins.
+
+   A real recorded track (sounds/musictrack.mp3) is tried first,
+   same pattern as the Howzat recording — if it hasn't been
+   uploaded yet, or fails to load for any reason, this quietly
+   falls back to the synthesized tune below rather than breaking.
    ========================================================= */
 let landingMusicPlaying = false;
+let landingMusicMode = null; // 'recorded' | 'synth' | null
 let landingMusicStep = 0;
 let landingMusicTimer = null;
 const LANDING_STEP_MS = 190;
+
+const musicTrackAudio = new Audio('sounds/musictrack.mp3');
+musicTrackAudio.loop = true;
+musicTrackAudio.volume = 0.5;
+musicTrackAudio.preload = 'auto';
+let musicTrackFailed = false;
+musicTrackAudio.addEventListener('error', () => { musicTrackFailed = true; });
 
 // 0 = rest. Bass walks a I-vi-IV-V-ish shape with syncopated gaps —
 // classic "skank" rhythmic feel (hits land on the off-beats).
@@ -497,17 +510,43 @@ const LANDING_LEAD = [0, 523.25, 0, 659.25, 523.25, 0, 587.33, 0,
 function startLandingMusic() {
   if (landingMusicPlaying || !audioCtx) return;
   landingMusicPlaying = true;
+
+  if (!musicTrackFailed) {
+    landingMusicMode = 'recorded';
+    try {
+      musicTrackAudio.currentTime = 0;
+    } catch (e) { /* not loaded yet — fine, play() will still queue it up */ }
+    musicTrackAudio.volume = muted ? 0 : 0.5;
+    const playPromise = musicTrackAudio.play();
+    if (playPromise && playPromise.catch) {
+      playPromise.catch(() => {
+        musicTrackFailed = true;
+        startSynthLandingMusic();
+      });
+    }
+  } else {
+    startSynthLandingMusic();
+  }
+}
+
+function startSynthLandingMusic() {
+  landingMusicMode = 'synth';
   landingMusicStep = 0;
   scheduleLandingMusicStep();
 }
 
 function stopLandingMusic() {
   landingMusicPlaying = false;
-  if (landingMusicTimer) clearTimeout(landingMusicTimer);
+  if (landingMusicMode === 'recorded') {
+    musicTrackAudio.pause();
+  } else if (landingMusicTimer) {
+    clearTimeout(landingMusicTimer);
+  }
+  landingMusicMode = null;
 }
 
 function scheduleLandingMusicStep() {
-  if (!landingMusicPlaying) return;
+  if (!landingMusicPlaying || landingMusicMode !== 'synth') return;
   const bassFreq = LANDING_BASS[landingMusicStep % LANDING_BASS.length];
   const leadFreq = LANDING_LEAD[landingMusicStep % LANDING_LEAD.length];
   if (bassFreq) playTone(bassFreq, 0.24, 'triangle', 0.06);       // round, soft bass
@@ -553,6 +592,10 @@ function toggleMute() {
   muted = !muted;
   document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
   if (masterGain) masterGain.gain.value = muted ? 0 : 1;
+  // The recorded music track is a plain <audio> element, separate from the
+  // Web Audio graph masterGain controls — needs muting explicitly so it
+  // doesn't keep playing through a mute toggle mid-track.
+  musicTrackAudio.volume = muted ? 0 : 0.5;
 }
 document.getElementById('muteBtn').addEventListener('click', () => { initAudio(); toggleMute(); });
 
