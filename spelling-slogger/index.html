@@ -461,11 +461,10 @@ const SCENARIOS = [
    ========================================================= */
 let audioCtx = null, masterGain = null, muted = false;
 function initAudio() {
-  if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
+  if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); startLandingMusic(); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   audioCtx = new AC();
-  if (audioCtx.state === 'suspended') audioCtx.resume(); // some browsers create it suspended even here
   masterGain = audioCtx.createGain();
   masterGain.gain.value = muted ? 0 : 1;
   masterGain.connect(audioCtx.destination);
@@ -510,6 +509,16 @@ const LANDING_LEAD = [0, 523.25, 0, 659.25, 523.25, 0, 587.33, 0,
 
 function startLandingMusic() {
   if (landingMusicPlaying || !audioCtx) return;
+  // resume() is asynchronous — it takes a moment to actually finish, even
+  // when called right inside a genuine click handler. Trying to play
+  // anything before it resolves gets silently dropped, since the context
+  // isn't truly "running" yet at that exact instant. Waiting for it here
+  // (rather than in whichever function happened to call this) means every
+  // path that starts the landing music is protected the same way.
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().then(startLandingMusic);
+    return;
+  }
   landingMusicPlaying = true;
 
   if (!musicTrackFailed) {
