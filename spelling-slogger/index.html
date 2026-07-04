@@ -523,9 +523,11 @@ function startLandingMusic() {
 
   if (!musicTrackFailed) {
     landingMusicMode = 'recorded';
-    try {
-      musicTrackAudio.currentTime = 0;
-    } catch (e) { /* not loaded yet — fine, play() will still queue it up */ }
+    // Deliberately not resetting currentTime here — doing that before the
+    // browser has finished loading the file's metadata can itself interrupt
+    // the load and trigger a genuine error, as a side effect of our own
+    // code getting in the way. The track will just resume wherever it left
+    // off on a restart, which is unnoticeable for background music anyway.
     musicTrackAudio.volume = muted ? 0 : 0.5;
     const playPromise = musicTrackAudio.play();
     if (playPromise && playPromise.catch) {
