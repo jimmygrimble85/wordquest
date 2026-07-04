@@ -984,7 +984,7 @@ setSpeedTier(gameSpeedTier); // sync dial/label/buttons to stored or default val
    HOW TO PLAY (now shown by default every time the game loads)
    ========================================================= */
 document.getElementById('howToPlayBtn').addEventListener('click', () => showScreen('howToPlayScreen'));
-document.getElementById('howToPlayBackBtn').addEventListener('click', () => showScreen('startScreen'));
+document.getElementById('howToPlayBackBtn').addEventListener('click', () => { initAudio(); showScreen('startScreen'); });
 showScreen('howToPlayScreen');
 
 document.getElementById('classicBtn').addEventListener('click', () => {
