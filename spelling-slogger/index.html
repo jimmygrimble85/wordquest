@@ -465,6 +465,7 @@ function initAudio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   audioCtx = new AC();
+  if (audioCtx.state === 'suspended') audioCtx.resume(); // some browsers create it suspended even here
   masterGain = audioCtx.createGain();
   masterGain.gain.value = muted ? 0 : 1;
   masterGain.connect(audioCtx.destination);
@@ -520,8 +521,13 @@ function startLandingMusic() {
     const playPromise = musicTrackAudio.play();
     if (playPromise && playPromise.catch) {
       playPromise.catch(() => {
-        musicTrackFailed = true;
-        startSynthLandingMusic();
+        // Don't permanently give up here — a rejected play() is very often
+        // a transient autoplay-policy hiccup, not a genuine load failure
+        // (that's handled separately by the 'error' event above, which DOES
+        // permanently fall back). Just reset so the next interaction —
+        // e.g. clicking Classic/Scenario a moment later — tries again.
+        landingMusicPlaying = false;
+        landingMusicMode = null;
       });
     }
   } else {
@@ -964,16 +970,11 @@ document.querySelectorAll('.speed-btn').forEach(btn => {
 setSpeedTier(gameSpeedTier); // sync dial/label/buttons to stored or default value on load
 
 /* =========================================================
-   HOW TO PLAY (auto-shows once on first visit, via localStorage)
+   HOW TO PLAY (now shown by default every time the game loads)
    ========================================================= */
 document.getElementById('howToPlayBtn').addEventListener('click', () => showScreen('howToPlayScreen'));
-document.getElementById('howToPlayBackBtn').addEventListener('click', () => {
-  localStorage.setItem('slogger_seen_intro', '1');
-  showScreen('startScreen');
-});
-if (!localStorage.getItem('slogger_seen_intro')) {
-  showScreen('howToPlayScreen');
-}
+document.getElementById('howToPlayBackBtn').addEventListener('click', () => showScreen('startScreen'));
+showScreen('howToPlayScreen');
 
 document.getElementById('classicBtn').addEventListener('click', () => {
   initAudio();
