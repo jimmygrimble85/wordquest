@@ -572,39 +572,6 @@ function scheduleLandingMusicStep() {
   landingMusicTimer = setTimeout(scheduleLandingMusicStep, LANDING_STEP_MS);
 }
 
-/* =========================================================
-   GAMEPLAY SOUNDTRACK
-   Deliberately much sparser and quieter than the landing tune —
-   a slow, understated pulse, not a full riff — since it has to sit
-   underneath bat cracks, wickets, applause, and Howzat without
-   fighting them for attention. Single layer only.
-   ========================================================= */
-let gameplayMusicPlaying = false;
-let gameplayMusicStep = 0;
-let gameplayMusicTimer = null;
-const GAMEPLAY_STEP_MS = 280;
-const GAMEPLAY_PULSE = [98.00, 0, 0, 0, 123.47, 0, 0, 0, 110.00, 0, 0, 0, 98.00, 0, 0, 0];
-
-function startGameplayMusic() {
-  if (gameplayMusicPlaying || !audioCtx) return;
-  gameplayMusicPlaying = true;
-  gameplayMusicStep = 0;
-  scheduleGameplayMusicStep();
-}
-
-function stopGameplayMusic() {
-  gameplayMusicPlaying = false;
-  if (gameplayMusicTimer) clearTimeout(gameplayMusicTimer);
-}
-
-function scheduleGameplayMusicStep() {
-  if (!gameplayMusicPlaying) return;
-  const freq = GAMEPLAY_PULSE[gameplayMusicStep % GAMEPLAY_PULSE.length];
-  if (freq) playTone(freq, 0.5, 'sine', 0.025); // very soft — background, not foreground
-  gameplayMusicStep++;
-  gameplayMusicTimer = setTimeout(scheduleGameplayMusicStep, GAMEPLAY_STEP_MS);
-}
-
 function toggleMute() {
   muted = !muted;
   document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
@@ -884,11 +851,9 @@ function showScreen(id) {
   document.getElementById('pauseBtn').classList.toggle('hidden', id !== 'gameScreen');
   if (id === 'startScreen') { updatePersonalBestDisplay(); updateScenarioWinsDisplay(); }
   if (id === 'gameScreen') {
-    stopLandingMusic();
-    if (audioCtx) startGameplayMusic();
-  } else {
-    stopGameplayMusic();
-    if (audioCtx) startLandingMusic();
+    stopLandingMusic(); // no music at all during active play
+  } else if (audioCtx) {
+    startLandingMusic();
   }
 }
 
@@ -1032,7 +997,7 @@ document.getElementById('retryBtn').addEventListener('click', () => showScreen('
 document.getElementById('pauseBtn').addEventListener('click', () => {
   if (!state.running || state.paused) return;
   state.paused = true;
-  stopGameplayMusic();
+  if (audioCtx) startLandingMusic(); // pause counts as a menu-ish moment, so music comes back
   document.getElementById('pauseOverlay').classList.remove('hidden');
 });
 
@@ -1040,7 +1005,7 @@ document.getElementById('resumeBtn').addEventListener('click', () => {
   if (!state.paused) return;
   state.paused = false;
   document.getElementById('pauseOverlay').classList.add('hidden');
-  if (audioCtx) startGameplayMusic();
+  stopLandingMusic(); // back to silence for actual live play
   state.lastFrameTime = performance.now(); // avoids a huge dt jump after the pause
   requestAnimationFrame(gameLoop);
 });
