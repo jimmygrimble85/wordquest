@@ -567,13 +567,24 @@ function drawKowhaiwhaiBorder(y, width) {
    Tries a real hosted image first (images/tino-rangatiratanga.png,
    same "host your own asset" pattern as the Howzat recording and
    music track), falling back to a canvas-drawn approximation if
-   it hasn't been uploaded yet or fails to load.
+   it hasn't been uploaded yet or fails to load. Tries PNG first
+   (better for flat colours/sharp edges like a flag), then JPG,
+   so either format works without needing to coordinate exactly
+   which one was uploaded.
    ========================================================= */
 const flagImage = new Image();
 let flagImageLoaded = false;
 let flagImageFailed = false;
+let triedJpgFallback = false;
 flagImage.addEventListener('load', () => { flagImageLoaded = true; });
-flagImage.addEventListener('error', () => { flagImageFailed = true; });
+flagImage.addEventListener('error', () => {
+  if (!triedJpgFallback) {
+    triedJpgFallback = true;
+    flagImage.src = 'images/tino-rangatiratanga.jpg';
+  } else {
+    flagImageFailed = true;
+  }
+});
 flagImage.src = 'images/tino-rangatiratanga.png';
 
 function drawTinoRangatiratangaFlag(x, y, w, h) {
