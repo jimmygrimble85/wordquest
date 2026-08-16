@@ -58,7 +58,7 @@
     <label style="display:block; margin-bottom:8px;">Input Method</label>
     <div class="modeGroup">
       <button class="secondary choice-btn selected" id="modeSprintBtn" data-mode="sprint">⚡ Kupu Sprint</button>
-      <button class="secondary choice-btn" id="modeTyperBtn" data-mode="typer" disabled>⌨️ Reo Typer (coming soon)</button>
+      <button class="secondary choice-btn" id="modeTyperBtn" data-mode="typer">⌨️ Reo Typer</button>
     </div>
   </div>
 
@@ -91,8 +91,17 @@
     <span id="sectionDisplay">Full Race</span>
   </div>
   <div id="clueBar">...</div>
+  <div id="revealBar" style="width:100%; text-align:center; font-size:1.05em; min-height:1.3em; color:#f5f0e8;"></div>
   <canvas id="raceCanvas" width="860" height="260"></canvas>
   <div class="optionsGrid" id="optionsGrid"></div>
+
+  <div class="hidden" id="typerArea" style="width:100%; display:flex; flex-direction:column; gap:8px; align-items:center;">
+    <div id="macronRow" style="display:flex; gap:6px;"></div>
+    <input type="text" id="typerInput" autocomplete="off" autocapitalize="off" spellcheck="false"
+           style="width:100%; padding:14px; font-size:1.2em; text-align:center; background:var(--bg-mid); color:var(--text); border:1px solid #6a2a2a; border-radius:8px;"
+           placeholder="Type your answer...">
+    <button class="primary" id="typerSubmitBtn" style="width:100%;">Submit</button>
+  </div>
 </div>
 
 <!-- RESULTS SCREEN -->
@@ -363,6 +372,7 @@ function setChoice(groupBtnIds, activeId, stateKey, stateVal) {
 }
 
 document.getElementById('modeSprintBtn').addEventListener('click', () => setChoice(['modeSprintBtn','modeTyperBtn'], 'modeSprintBtn', 'inputMode', 'sprint'));
+document.getElementById('modeTyperBtn').addEventListener('click', () => setChoice(['modeSprintBtn','modeTyperBtn'], 'modeTyperBtn', 'inputMode', 'typer'));
 
 document.getElementById('contentFullBtn').addEventListener('click', () => {
   setChoice(['contentFullBtn','contentPracticeBtn'], 'contentFullBtn', 'contentMode', 'full');
@@ -465,6 +475,7 @@ function nextQuestion() {
 
   const promptLabel = item.direction === 'en-mi' ? 'What is this in Te Reo Māori?' : 'What does this mean in English?';
   document.getElementById('clueBar').innerHTML = `${promptLabel}<br><b>"${item.q}"</b>`;
+  document.getElementById('revealBar').textContent = '';
 
   // Distractors come from the SAME section only, so they can't be
   // eliminated just by being obviously unrelated to the category.
@@ -486,6 +497,21 @@ function nextQuestion() {
 
   const options = [item, ...distractors].sort(() => Math.random() - 0.5);
 
+  if (state.inputMode === 'typer') {
+    document.getElementById('optionsGrid').classList.add('hidden');
+    document.getElementById('typerArea').classList.remove('hidden');
+    const input = document.getElementById('typerInput');
+    input.value = '';
+    input.disabled = false;
+    input.style.borderColor = '#6a2a2a';
+    document.getElementById('typerSubmitBtn').disabled = false;
+    setTimeout(() => input.focus(), 50);
+    buildMacronRow(item.direction === 'en-mi');
+    return;
+  }
+
+  document.getElementById('optionsGrid').classList.remove('hidden');
+  document.getElementById('typerArea').classList.add('hidden');
   const grid = document.getElementById('optionsGrid');
   grid.innerHTML = '';
   options.forEach(opt => {
@@ -497,27 +523,85 @@ function nextQuestion() {
   });
 }
 
+/* =========================================================
+   REO TYPER — text input with a macron helper row, since
+   standard keyboards don't have ā/ē/ī/ō/ū
+   ========================================================= */
+function buildMacronRow(showMacrons) {
+  const row = document.getElementById('macronRow');
+  row.innerHTML = '';
+  row.classList.toggle('hidden', !showMacrons);
+  if (!showMacrons) return; // English answers (Section 8) don't need macron keys
+  ['ā','ē','ī','ō','ū'].forEach(ch => {
+    const btn = document.createElement('button');
+    btn.className = 'secondary';
+    btn.type = 'button';
+    btn.textContent = ch;
+    btn.style.fontSize = '1.15em';
+    btn.style.padding = '8px 14px';
+    btn.addEventListener('click', () => insertAtCursor(ch));
+    row.appendChild(btn);
+  });
+}
+
+function insertAtCursor(text) {
+  const input = document.getElementById('typerInput');
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  input.value = input.value.slice(0, start) + text + input.value.slice(end);
+  input.focus();
+  input.setSelectionRange(start + text.length, start + text.length);
+}
+
+// Lenient normalization for comparison: trims whitespace, collapses
+// multiple spaces, drops trailing punctuation, case-insensitive — but
+// never touches macrons themselves, since exact tohutō placement is
+// the whole point of this mode.
+function normalizeAnswer(str) {
+  return str.trim().toLowerCase().replace(/[?!.]+$/g, '').replace(/\s+/g, ' ');
+}
+
+function submitTypedAnswer() {
+  const input = document.getElementById('typerInput');
+  if (input.disabled) return;
+  input.disabled = true;
+  document.getElementById('typerSubmitBtn').disabled = true;
+  const correct = normalizeAnswer(input.value) === normalizeAnswer(state.currentItem.a);
+  handleAnswer(correct, null);
+}
+
+document.getElementById('typerSubmitBtn').addEventListener('click', submitTypedAnswer);
+document.getElementById('typerInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitTypedAnswer();
+});
+
 function handleAnswer(correct, btnEl) {
   document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
   state.attempts++;
+  const typerInput = document.getElementById('typerInput');
+  const revealBar = document.getElementById('revealBar');
   if (correct) {
     state.correctCount++;
     state.streak++;
     state.playerProgress++;
     playSound('correct');
-    btnEl.style.background = 'var(--good)';
+    if (btnEl) btnEl.style.background = 'var(--good)';
+    else typerInput.style.borderColor = 'var(--good)';
+    revealBar.textContent = '';
   } else {
     state.streak = 0;
     playSound('wrong');
-    btnEl.style.background = '#c0392b';
+    if (btnEl) btnEl.style.background = '#c0392b';
+    else typerInput.style.borderColor = '#c0392b';
+    revealBar.innerHTML = `Correct answer: <b style="color:var(--accent);">${state.currentItem.a}</b>`;
   }
   updateHud();
 
   if (state.stakes !== 'infinite' && state.playerProgress >= state.raceLength) {
-    setTimeout(() => endRace(true), 500);
+    setTimeout(() => endRace(true), correct ? 500 : 1800);
     return;
   }
-  setTimeout(() => { if (state.running) nextQuestion(); }, 550);
+  setTimeout(() => { if (state.running) nextQuestion(); }, correct ? 550 : 1800);
 }
 
 function updateHud() {
