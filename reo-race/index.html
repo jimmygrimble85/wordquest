@@ -388,9 +388,12 @@ document.getElementById('backToMenuBtn').addEventListener('click', () => showScr
    RACE SETUP
    ========================================================= */
 function getActivePool() {
-  if (state.contentMode === 'practice') return SECTIONS[state.sectionIndex].items.map(it => ({...it, direction: SECTIONS[state.sectionIndex].direction}));
-  // Full race: pool every item from every section, tagging each with its own direction
-  return SECTIONS.flatMap(s => s.items.map(it => ({...it, direction: s.direction})));
+  if (state.contentMode === 'practice') {
+    const s = SECTIONS[state.sectionIndex];
+    return s.items.map(it => ({...it, direction: s.direction, section: s.name}));
+  }
+  // Full race: pool every item from every section, tagging each with its own direction + section
+  return SECTIONS.flatMap(s => s.items.map(it => ({...it, direction: s.direction, section: s.name})));
 }
 
 function startRace() {
@@ -412,6 +415,45 @@ function startRace() {
 /* =========================================================
    QUESTION GENERATION
    ========================================================= */
+const MACRON_TO_PLAIN = { 'ā':'a','ē':'e','ī':'i','ō':'o','ū':'u', 'Ā':'A','Ē':'E','Ī':'I','Ō':'O','Ū':'U' };
+const PLAIN_TO_MACRON = { 'a':'ā','e':'ē','i':'ī','o':'ō','u':'ū', 'A':'Ā','E':'Ē','I':'Ī','O':'Ō','U':'Ū' };
+
+// Builds a deliberate near-miss distractor: the correct word but with a
+// tohutō removed, added somewhere it shouldn't be, or shifted to a
+// different vowel — directly testing macron placement, not just whether
+// the student recognises the word at all.
+function generateMacronDistractor(word) {
+  const chars = word.split('');
+  const macronPositions = [];
+  const plainVowelPositions = [];
+  chars.forEach((c, i) => {
+    if (MACRON_TO_PLAIN[c]) macronPositions.push(i);
+    else if (PLAIN_TO_MACRON[c]) plainVowelPositions.push(i);
+  });
+
+  const strategies = [];
+  if (macronPositions.length > 0) strategies.push('remove');
+  if (plainVowelPositions.length > 0) strategies.push('add');
+  if (macronPositions.length > 0 && plainVowelPositions.length > 0) strategies.push('shift');
+  if (strategies.length === 0) return null;
+
+  const strategy = strategies[Math.floor(Math.random() * strategies.length)];
+  if (strategy === 'remove') {
+    const pos = macronPositions[Math.floor(Math.random() * macronPositions.length)];
+    chars[pos] = MACRON_TO_PLAIN[chars[pos]];
+  } else if (strategy === 'add') {
+    const pos = plainVowelPositions[Math.floor(Math.random() * plainVowelPositions.length)];
+    chars[pos] = PLAIN_TO_MACRON[chars[pos]];
+  } else {
+    const removePos = macronPositions[Math.floor(Math.random() * macronPositions.length)];
+    const addPos = plainVowelPositions[Math.floor(Math.random() * plainVowelPositions.length)];
+    chars[removePos] = MACRON_TO_PLAIN[chars[removePos]];
+    chars[addPos] = PLAIN_TO_MACRON[chars[addPos]];
+  }
+  const result = chars.join('');
+  return result === word ? null : result;
+}
+
 function nextQuestion() {
   const pool = getActivePool();
   let available = pool.map((item, idx) => idx).filter(idx => !state.usedIndices.includes(idx));
@@ -424,10 +466,25 @@ function nextQuestion() {
   const promptLabel = item.direction === 'en-mi' ? 'What is this in Te Reo Māori?' : 'What does this mean in English?';
   document.getElementById('clueBar').innerHTML = `${promptLabel}<br><b>"${item.q}"</b>`;
 
-  // Build 4 options: correct answer + 3 distractors from the same pool
-  const others = pool.filter(i => i.a !== item.a);
-  const shuffledOthers = [...others].sort(() => Math.random() - 0.5).slice(0, 3);
-  const options = [item, ...shuffledOthers].sort(() => Math.random() - 0.5);
+  // Distractors come from the SAME section only, so they can't be
+  // eliminated just by being obviously unrelated to the category.
+  const sameSectionOthers = pool.filter(i => i.section === item.section && i.a !== item.a);
+  const shuffledOthers = [...sameSectionOthers].sort(() => Math.random() - 0.5);
+
+  const distractors = [];
+  // For English→Māori questions, try to include one deliberate
+  // tohutō-based near-miss among the wrong options.
+  if (item.direction === 'en-mi') {
+    const macronVariant = generateMacronDistractor(item.a);
+    if (macronVariant && !pool.some(i => i.a === macronVariant)) {
+      distractors.push({ a: macronVariant });
+    }
+  }
+  while (distractors.length < 3 && shuffledOthers.length > 0) {
+    distractors.push(shuffledOthers.shift());
+  }
+
+  const options = [item, ...distractors].sort(() => Math.random() - 0.5);
 
   const grid = document.getElementById('optionsGrid');
   grid.innerHTML = '';
