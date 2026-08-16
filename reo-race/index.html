@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reo Race</title>
+<style>
+  :root {
+    --bg-dark: #150606;
+    --bg-mid: #2b0a0a;
+    --accent: #e11d33;
+    --accent2: #111111;
+    --good: #2ecc71;
+    --text: #f5f0e8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; height:100%; background:var(--bg-dark); color:var(--text); font-family:'Segoe UI',Verdana,sans-serif; overflow:hidden; }
+  #app { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; height:100%; width:100%; padding-top:32px; overflow-y:auto; box-sizing:border-box; }
+  .screen { width:min(900px,96vw); display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .hidden { display:none !important; }
+  h1 { font-size:2.1em; margin:0; color:var(--accent); text-shadow:2px 2px 0 var(--accent2); }
+  p.sub { margin:0; opacity:0.85; text-align:center; max-width:600px; }
+  .card { background:var(--bg-mid); border-radius:12px; padding:20px; width:100%; box-shadow:0 8px 24px rgba(0,0,0,0.5); border:1px solid #4a1414; }
+  button { font-size:1em; padding:10px 16px; border-radius:8px; border:none; font-family:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); color:white; font-weight:bold; width:100%; font-size:1.1em; padding:14px; }
+  button.primary:hover { background:#ff2d44; }
+  button.secondary { background:transparent; color:var(--text); border:1px solid #6a2a2a; }
+  button.choice-btn.selected, button.option-btn.active-choice { background:var(--accent); color:white; border-color:var(--accent); font-weight:bold; }
+  button:disabled { opacity:0.4; cursor:not-allowed; }
+  label { font-size:0.9em; opacity:0.9; }
+  select { width:100%; padding:10px; background:var(--bg-dark); color:var(--text); border:1px solid #4a1414; border-radius:8px; }
+  #hud { display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:8px; width:100%; padding:8px 4px; font-size:0.95em; }
+  #hud span { background:var(--bg-mid); padding:6px 12px; border-radius:8px; border:1px solid #4a1414; }
+  #clueBar { width:100%; text-align:center; font-size:1.3em; padding:12px; background:var(--bg-mid); border-radius:8px; min-height:1.4em; border:1px solid #4a1414; }
+  #clueBar b { color:var(--accent); }
+  #raceCanvas { display:block; border-radius:12px; }
+  .optionsGrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; }
+  .option-btn { background:var(--bg-mid); color:var(--text); border:1px solid #6a2a2a; padding:14px; font-size:1.05em; border-radius:10px; }
+  .option-btn:hover { border-color:var(--accent); }
+  .modeGroup { display:flex; gap:8px; flex-wrap:wrap; }
+  .modeGroup button { flex:1; min-width:100px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+<div id="muteBtn" style="position:fixed; top:12px; right:12px; z-index:1000; background:var(--bg-mid); color:var(--text); border-radius:8px; padding:6px 12px; font-size:0.95em; cursor:pointer; border:1px solid #4a1414;">🔊</div>
+<div id="kowhaiwhaiTop" style="position:fixed; top:0; left:0; width:100%; height:28px; background:#0d0d0d; display:flex; align-items:center; justify-content:center; overflow:hidden; z-index:500;"></div>
+<div id="kowhaiwhaiBottom" style="position:fixed; bottom:0; left:0; width:100%; height:28px; background:#0d0d0d; display:flex; align-items:center; justify-content:center; overflow:hidden; z-index:500;"></div>
+<div id="versionLabel" style="position:fixed; bottom:10px; left:10px; z-index:1000; background:rgba(43,10,10,0.85); border:1px solid #4a1414; color:#d99; border-radius:6px; padding:4px 10px; font-size:0.75em;">Alpha v1.0</div>
+
+<!-- START SCREEN -->
+<div class="screen" id="startScreen">
+  <h1>🛶 Reo Race</h1>
+  <p class="sub">Answer correctly to paddle your waka forward. Race the rival waka to the finish!</p>
+
+  <div class="card">
+    <label style="display:block; margin-bottom:8px;">Input Method</label>
+    <div class="modeGroup">
+      <button class="secondary choice-btn selected" id="modeSprintBtn" data-mode="sprint">⚡ Kupu Sprint</button>
+      <button class="secondary choice-btn" id="modeTyperBtn" data-mode="typer" disabled>⌨️ Reo Typer (coming soon)</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label style="display:block; margin-bottom:8px;">Content</label>
+    <div class="modeGroup" style="margin-bottom:10px;">
+      <button class="secondary choice-btn selected" id="contentFullBtn" data-content="full">🌊 Full Race (all kupu)</button>
+      <button class="secondary choice-btn" id="contentPracticeBtn" data-content="practice">🎯 Practice a Section</button>
+    </div>
+    <select id="sectionSelect" class="hidden" style="margin-top:6px;"></select>
+  </div>
+
+  <div class="card">
+    <label style="display:block; margin-bottom:8px;">Stakes</label>
+    <div class="modeGroup">
+      <button class="secondary choice-btn selected" id="stakesNormalBtn" data-stakes="normal">🙂 Normal</button>
+      <button class="secondary choice-btn" id="stakesExtremeBtn" data-stakes="extreme">🔥 Extreme</button>
+      <button class="secondary choice-btn" id="stakesInfiniteBtn" data-stakes="infinite">♾️ Infinite Practice</button>
+    </div>
+  </div>
+
+  <button class="primary" id="startRaceBtn">🛶 Start Race</button>
+</div>
+
+<!-- RACE SCREEN -->
+<div class="screen hidden" id="raceScreen">
+  <div id="hud">
+    <span id="progressDisplay">0 / 12</span>
+    <span id="streakDisplay">Streak: 0</span>
+    <span id="sectionDisplay">Full Race</span>
+  </div>
+  <div id="clueBar">...</div>
+  <canvas id="raceCanvas" width="860" height="260"></canvas>
+  <div class="optionsGrid" id="optionsGrid"></div>
+</div>
+
+<!-- RESULTS SCREEN -->
+<div class="screen hidden" id="resultsScreen">
+  <h1 id="resultsTitle">🏁 Race Complete!</h1>
+  <div class="card" style="text-align:center;">
+    <div class="sub" id="resultsMessage" style="margin-bottom:10px;"></div>
+    <div style="font-size:2em; font-weight:bold; color:var(--accent);" id="resultsAccuracy">0%</div>
+    <div class="sub">accuracy</div>
+  </div>
+  <button class="primary" id="backToMenuBtn">Back to Menu</button>
+</div>
+
+</div>
+
+<script>
+/* =========================================================
+   CONTENT — Te Reoathon word list, tohutō (macrons) only.
+   direction: 'en-mi' (show English, answer Māori) or
+              'mi-en' (show Māori, answer English)
+   ========================================================= */
+const SECTIONS = [
+  { name: "Values and School Kupu", direction: 'en-mi', items: [
+    { q: "Respect", a: "Whakarangatira" },
+    { q: "Excellence", a: "Kairangi" },
+    { q: "Resilience", a: "Manawaroa" },
+    { q: "Empathy", a: "Ngākau Aroha" },
+    { q: "principal", a: "Tumuaki" },
+    { q: "teachers", a: "Kaiako" },
+    { q: "learners", a: "Ākonga" },
+    { q: "students", a: "Tauira" },
+    { q: "school", a: "Kura" },
+    { q: "classroom", a: "Akomanga" },
+    { q: "assembly", a: "Hui ā Kura" },
+    { q: "teach", a: "Whakaako" },
+    { q: "learn", a: "Ako" },
+    { q: "work", a: "Mahi" }
+  ]},
+  { name: "School Kupu", direction: 'en-mi', items: [
+    { q: "Reading", a: "Pānui" },
+    { q: "Writing", a: "Tuhituhi" },
+    { q: "Mathematics", a: "Pāngarau" },
+    { q: "Science", a: "Pūtaiao" },
+    { q: "Sport", a: "Hākinakina" },
+    { q: "Music", a: "Puoro" },
+    { q: "Art", a: "Mahi Toi" },
+    { q: "Cooking", a: "Tunu Kai" },
+    { q: "Technology", a: "Hangarau" },
+    { q: "History", a: "Hītori" }
+  ]},
+  { name: "Questions", direction: 'en-mi', items: [
+    { q: "Who?", a: "Ko Wai?" },
+    { q: "What?", a: "He Aha?" },
+    { q: "Where?", a: "Kei Hea?" },
+    { q: "When (future)?", a: "Āhea?" },
+    { q: "When (past)?", a: "Inahea?" },
+    { q: "Why?", a: "He Aha Ai?" },
+    { q: "How?", a: "Pēhea?" }
+  ]},
+  { name: "Nouns", direction: 'en-mi', items: [
+    { q: "block / period", a: "Wā" },
+    { q: "table / desk", a: "Tēpu" },
+    { q: "chair", a: "Tūru" },
+    { q: "door", a: "Kūaha" },
+    { q: "window", a: "Matapihi" },
+    { q: "computer", a: "Rorohiko" },
+    { q: "pen", a: "Pene" },
+    { q: "clock", a: "Karaka" },
+    { q: "cellphone", a: "Waea Pūkoro" },
+    { q: "whiteboard", a: "Papamā" },
+    { q: "book", a: "Pukapuka" },
+    { q: "hat", a: "Pōtae" },
+    { q: "Morning", a: "Ata" },
+    { q: "Tomorrow", a: "Āpōpō" },
+    { q: "Weather", a: "Huarere" },
+    { q: "Afternoon", a: "Ahiahi" },
+    { q: "Yesterday", a: "Inanahi" },
+    { q: "Bus", a: "Pahi" }
+  ]},
+  { name: "Locations Kupu", direction: 'en-mi', items: [
+    { q: "here (this place)", a: "Konei" },
+    { q: "there (that place)", a: "Konā" },
+    { q: "this", a: "Tēnei" },
+    { q: "that", a: "Tēnā" },
+    { q: "that (over there)", a: "Tērā" },
+    { q: "top / on top of", a: "Runga" },
+    { q: "bottom / under", a: "Raro" },
+    { q: "outside", a: "Waho" },
+    { q: "inside", a: "Roto" }
+  ]},
+  { name: "Adjectives", direction: 'en-mi', items: [
+    { q: "easy", a: "Ngāwari" },
+    { q: "difficult", a: "Uaua" },
+    { q: "right (correct)", a: "Tika" },
+    { q: "wrong", a: "Hē" },
+    { q: "Big", a: "Nui" },
+    { q: "Small", a: "Iti" },
+    { q: "happy", a: "Harikoa" },
+    { q: "sad", a: "Pōuri" },
+    { q: "angry", a: "Riri" },
+    { q: "tired", a: "Ngenge" },
+    { q: "hungry", a: "Hiakai" },
+    { q: "thirsty", a: "Hiainu" },
+    { q: "tidy", a: "Whakapai" },
+    { q: "noisy", a: "Haunene" }
+  ]},
+  { name: "Verbs", direction: 'en-mi', items: [
+    { q: "smile", a: "Menemene" },
+    { q: "laugh", a: "Kata" },
+    { q: "argue", a: "Taupatupatu" },
+    { q: "cry", a: "Tangi" },
+    { q: "speak / talk", a: "Kōrero" },
+    { q: "walk", a: "Hīkoi" },
+    { q: "run", a: "Oma" },
+    { q: "jump", a: "Peke" }
+  ]},
+  { name: "Phrases", direction: 'mi-en', items: [
+    { q: "Kia tūrituri", a: "Be quiet" },
+    { q: "Hoki mai", a: "Come back" },
+    { q: "Rārangi", a: "Line up" },
+    { q: "Kuhu mai", a: "Come in" },
+    { q: "Ruapapa mai", a: "Repeat after me" },
+    { q: "Ringa ki runga", a: "Hands up" },
+    { q: "Tītiro mai", a: "Look at me" },
+    { q: "Whakarongo mai", a: "Listen to me" },
+    { q: "Me haere au ki te wharepaku", a: "I need to go to the toilet" },
+    { q: "Kei te mārama?", a: "Do you understand?" },
+    { q: "He pātai?", a: "Any questions?" },
+    { q: "Wā whakapaingia", a: "Time to tidy up" }
+  ]},
+  { name: "Family", direction: 'en-mi', items: [
+    { q: "Family", a: "Whānau" },
+    { q: "Mum", a: "Māmā" },
+    { q: "Dad", a: "Pāpā" },
+    { q: "Brother", a: "Parata" },
+    { q: "Sister", a: "Hēhita" },
+    { q: "Grandmother", a: "Kuia" },
+    { q: "Grandfather", a: "Koroua" },
+    { q: "Friend", a: "Hoa" }
+  ]}
+];
+
+/* =========================================================
+   AUDIO (same lightweight synthesis approach as our other games)
+   ========================================================= */
+let audioCtx = null, masterGain = null, muted = false;
+function initAudio() {
+  if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  audioCtx = new AC();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = muted ? 0 : 1;
+  masterGain.connect(audioCtx.destination);
+}
+function toggleMute() {
+  muted = !muted;
+  document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
+  if (masterGain) masterGain.gain.value = muted ? 0 : 1;
+}
+document.getElementById('muteBtn').addEventListener('click', () => { toggleMute(); initAudio(); });
+
+function playTone(freq, duration, type, gainPeak, startOffset, freqEnd) {
+  if (!audioCtx || muted) return;
+  const t0 = audioCtx.currentTime + (startOffset || 0);
+  const osc = audioCtx.createOscillator();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  if (freqEnd) osc.frequency.exponentialRampToValueAtTime(Math.max(freqEnd, 1), t0 + duration);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(gainPeak, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+  osc.connect(g); g.connect(masterGain);
+  osc.start(t0); osc.stop(t0 + duration + 0.02);
+}
+function playSound(type) {
+  initAudio();
+  if (!audioCtx || muted) return;
+  if (type === 'correct') { playTone(523.25, 0.12, 'triangle', 0.18, 0); playTone(659.25, 0.14, 'triangle', 0.16, 0.06); }
+  else if (type === 'wrong') { playTone(180, 0.2, 'sawtooth', 0.15, 0, 90); }
+  else if (type === 'win') { [523.25,659.25,783.99,1046.5].forEach((f,i)=>playTone(f,0.2,'triangle',0.18,i*0.08)); }
+  else if (type === 'lose') { [392,349.23,293.66,220].forEach((f,i)=>playTone(f,0.3,'triangle',0.14,i*0.22)); }
+}
+
+/* =========================================================
+   STATE
+   ========================================================= */
+let state = {
+  inputMode: 'sprint',
+  contentMode: 'full',
+  sectionIndex: 0,
+  stakes: 'normal',
+  playerProgress: 0,
+  rivalProgress: 0,
+  raceLength: 12,
+  streak: 0,
+  attempts: 0,
+  correctCount: 0,
+  currentItem: null,
+  running: false,
+  raceStartTime: 0,
+  usedIndices: []
+};
+
+const canvas = document.getElementById('raceCanvas');
+const ctx = canvas.getContext('2d');
+
+function populateSectionSelect() {
+  const sel = document.getElementById('sectionSelect');
+  sel.innerHTML = '';
+  SECTIONS.forEach((s, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = s.name;
+    sel.appendChild(opt);
+  });
+}
+populateSectionSelect();
+
+/* =========================================================
+   SCREENS
+   ========================================================= */
+function showScreen(id) {
+  ['startScreen','raceScreen','resultsScreen'].forEach(s => {
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+  const showBorder = id === 'startScreen';
+  document.getElementById('kowhaiwhaiTop').classList.toggle('hidden', !showBorder);
+  document.getElementById('kowhaiwhaiBottom').classList.toggle('hidden', !showBorder);
+}
+
+/* =========================================================
+   KOWHAIWHAI BORDER (landing page) — crisp SVG koru icons,
+   generic pattern in the traditional red/black/white, not a
+   reproduction of any specific named or iwi-attributed design.
+   ========================================================= */
+function buildKowhaiwhaiRow(containerId, count) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  const svgNS = 'http://www.w3.org/2000/svg';
+  for (let i = 0; i < count; i++) {
+    const isRed = i % 2 === 1;
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('width', '30'); svg.setAttribute('height', '26'); svg.setAttribute('viewBox', '0 0 30 26');
+    svg.style.flexShrink = '0';
+    const path = document.createElementNS(svgNS, 'path');
+    path.setAttribute('d', i % 2 === 0
+      ? 'M4,20 Q12,4 20,11 A6.5,6.5 0 1,1 15,20'
+      : 'M26,20 Q18,4 10,11 A6.5,6.5 0 1,0 15,20');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', isRed ? '#c1272d' : '#f5f0e8');
+    path.setAttribute('stroke-width', '2.3');
+    path.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(path);
+    container.appendChild(svg);
+  }
+}
+buildKowhaiwhaiRow('kowhaiwhaiTop', 40);
+buildKowhaiwhaiRow('kowhaiwhaiBottom', 40);
+
+/* =========================================================
+   START SCREEN CONTROLS
+   ========================================================= */
+function setChoice(groupBtnIds, activeId, stateKey, stateVal) {
+  groupBtnIds.forEach(id => document.getElementById(id).classList.remove('selected'));
+  document.getElementById(activeId).classList.add('selected');
+  state[stateKey] = stateVal;
+}
+
+document.getElementById('modeSprintBtn').addEventListener('click', () => setChoice(['modeSprintBtn','modeTyperBtn'], 'modeSprintBtn', 'inputMode', 'sprint'));
+
+document.getElementById('contentFullBtn').addEventListener('click', () => {
+  setChoice(['contentFullBtn','contentPracticeBtn'], 'contentFullBtn', 'contentMode', 'full');
+  document.getElementById('sectionSelect').classList.add('hidden');
+});
+document.getElementById('contentPracticeBtn').addEventListener('click', () => {
+  setChoice(['contentFullBtn','contentPracticeBtn'], 'contentPracticeBtn', 'contentMode', 'practice');
+  document.getElementById('sectionSelect').classList.remove('hidden');
+});
+document.getElementById('sectionSelect').addEventListener('change', (e) => { state.sectionIndex = parseInt(e.target.value, 10); });
+
+document.getElementById('stakesNormalBtn').addEventListener('click', () => setChoice(['stakesNormalBtn','stakesExtremeBtn','stakesInfiniteBtn'], 'stakesNormalBtn', 'stakes', 'normal'));
+document.getElementById('stakesExtremeBtn').addEventListener('click', () => setChoice(['stakesNormalBtn','stakesExtremeBtn','stakesInfiniteBtn'], 'stakesExtremeBtn', 'stakes', 'extreme'));
+document.getElementById('stakesInfiniteBtn').addEventListener('click', () => setChoice(['stakesNormalBtn','stakesExtremeBtn','stakesInfiniteBtn'], 'stakesInfiniteBtn', 'stakes', 'infinite'));
+
+document.getElementById('startRaceBtn').addEventListener('click', () => {
+  initAudio();
+  startRace();
+});
+document.getElementById('backToMenuBtn').addEventListener('click', () => showScreen('startScreen'));
+
+/* =========================================================
+   RACE SETUP
+   ========================================================= */
+function getActivePool() {
+  if (state.contentMode === 'practice') return SECTIONS[state.sectionIndex].items.map(it => ({...it, direction: SECTIONS[state.sectionIndex].direction}));
+  // Full race: pool every item from every section, tagging each with its own direction
+  return SECTIONS.flatMap(s => s.items.map(it => ({...it, direction: s.direction})));
+}
+
+function startRace() {
+  state.playerProgress = 0;
+  state.rivalProgress = 0;
+  state.streak = 0;
+  state.attempts = 0;
+  state.correctCount = 0;
+  state.usedIndices = [];
+  state.running = true;
+  state.raceStartTime = performance.now();
+  document.getElementById('sectionDisplay').textContent = state.contentMode === 'practice' ? SECTIONS[state.sectionIndex].name : 'Full Race';
+  updateHud();
+  showScreen('raceScreen');
+  nextQuestion();
+  requestAnimationFrame(raceLoop);
+}
+
+/* =========================================================
+   QUESTION GENERATION
+   ========================================================= */
+function nextQuestion() {
+  const pool = getActivePool();
+  let available = pool.map((item, idx) => idx).filter(idx => !state.usedIndices.includes(idx));
+  if (available.length === 0) { state.usedIndices = []; available = pool.map((item, idx) => idx); }
+  const idx = available[Math.floor(Math.random() * available.length)];
+  state.usedIndices.push(idx);
+  const item = pool[idx];
+  state.currentItem = item;
+
+  const promptLabel = item.direction === 'en-mi' ? 'What is this in Te Reo Māori?' : 'What does this mean in English?';
+  document.getElementById('clueBar').innerHTML = `${promptLabel}<br><b>"${item.q}"</b>`;
+
+  // Build 4 options: correct answer + 3 distractors from the same pool
+  const others = pool.filter(i => i.a !== item.a);
+  const shuffledOthers = [...others].sort(() => Math.random() - 0.5).slice(0, 3);
+  const options = [item, ...shuffledOthers].sort(() => Math.random() - 0.5);
+
+  const grid = document.getElementById('optionsGrid');
+  grid.innerHTML = '';
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.textContent = opt.a;
+    btn.addEventListener('click', () => handleAnswer(opt.a === item.a, btn));
+    grid.appendChild(btn);
+  });
+}
+
+function handleAnswer(correct, btnEl) {
+  document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+  state.attempts++;
+  if (correct) {
+    state.correctCount++;
+    state.streak++;
+    state.playerProgress++;
+    playSound('correct');
+    btnEl.style.background = 'var(--good)';
+  } else {
+    state.streak = 0;
+    playSound('wrong');
+    btnEl.style.background = '#c0392b';
+  }
+  updateHud();
+
+  if (state.stakes !== 'infinite' && state.playerProgress >= state.raceLength) {
+    setTimeout(() => endRace(true), 500);
+    return;
+  }
+  setTimeout(() => { if (state.running) nextQuestion(); }, 550);
+}
+
+function updateHud() {
+  document.getElementById('progressDisplay').textContent = state.stakes === 'infinite'
+    ? `Correct: ${state.correctCount}`
+    : `${state.playerProgress} / ${state.raceLength}`;
+  document.getElementById('streakDisplay').textContent = `Streak: ${state.streak}`;
+}
+
+/* =========================================================
+   RACE LOOP — rival waka advances on its own clock
+   ========================================================= */
+function raceLoop(now) {
+  if (!state.running) return;
+
+  if (state.stakes !== 'infinite') {
+    const secondsPerLeg = state.stakes === 'extreme' ? 7 : 14;
+    const elapsed = (now - state.raceStartTime) / 1000;
+    state.rivalProgress = elapsed / secondsPerLeg;
+    if (state.rivalProgress >= state.raceLength) {
+      endRace(false);
+      return;
+    }
+  }
+
+  render(now);
+  requestAnimationFrame(raceLoop);
+}
+
+/* =========================================================
+   RENDER
+   ========================================================= */
+function render(now) {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // water
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, '#0a2a3a'); grad.addColorStop(1, '#05141c');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h);
+
+  // simple wave lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  for (let y = 44; y < h - 26; y += 24) {
+    ctx.beginPath();
+    for (let x = 0; x < w; x += 20) {
+      ctx.lineTo(x, y + Math.sin((x + y + now / 200) / 30) * 4);
+    }
+    ctx.stroke();
+  }
+
+  drawKowhaiwhaiBorder(0, w);
+  drawKowhaiwhaiBorder(h - 26, w);
+
+  const trackStart = 60, trackEnd = w - 90;
+  const trackWidth = trackEnd - trackStart;
+
+  drawTinoRangatiratangaFlag(trackEnd + 14, 30, 34, 24);
+
+  const playerFrac = Math.min(state.playerProgress / state.raceLength, 1);
+  const rivalFrac = state.stakes === 'infinite' ? 0 : Math.min(state.rivalProgress / state.raceLength, 1);
+
+  drawWaka(trackStart + playerFrac * trackWidth, h * 0.66, '#c1272d', 'You', now, state.running);
+  if (state.stakes !== 'infinite') {
+    drawWaka(trackStart + rivalFrac * trackWidth, h * 0.34, '#111111', 'Rival', now, state.running);
+  }
+}
+
+/* =========================================================
+   KOWHAIWHAI BORDER — a generic koru-scroll decorative band in
+   red/black/white, not a reproduction of any specific named or
+   iwi-attributed pattern, just the traditional visual language
+   used decoratively.
+   ========================================================= */
+function drawKoruUnit(x, y, scale, mirror, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale * (mirror ? -1 : 1), scale);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-16, 6);
+  ctx.quadraticCurveTo(-4, -9, 7, -3);
+  ctx.arc(7, 3, 6.5, -Math.PI * 1.3, Math.PI * 0.85, false);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawKowhaiwhaiBorder(y, width) {
+  ctx.fillStyle = '#0d0d0d';
+  ctx.fillRect(0, y, width, 26);
+  const spacing = 42;
+  let i = 0;
+  for (let x = 20; x < width; x += spacing) {
+    const color = i % 2 === 0 ? '#f5f0e8' : '#c1272d';
+    drawKoruUnit(x, y + 13, 1, i % 2 === 1, color);
+    i++;
+  }
+}
+
+/* =========================================================
+   TINO RANGATIRATANGA FLAG — flown near the finish line.
+   Tries a real hosted image first (images/tino-rangatiratanga.png,
+   same "host your own asset" pattern as the Howzat recording and
+   music track), falling back to a canvas-drawn approximation if
+   it hasn't been uploaded yet or fails to load.
+   ========================================================= */
+const flagImage = new Image();
+let flagImageLoaded = false;
+let flagImageFailed = false;
+flagImage.addEventListener('load', () => { flagImageLoaded = true; });
+flagImage.addEventListener('error', () => { flagImageFailed = true; });
+flagImage.src = 'images/tino-rangatiratanga.png';
+
+function drawTinoRangatiratangaFlag(x, y, w, h) {
+  ctx.save();
+  // pole
+  ctx.strokeStyle = '#8a7256';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + h + 30); ctx.stroke();
+
+  if (flagImageLoaded) {
+    ctx.drawImage(flagImage, x, y, w, h);
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+  } else {
+    drawFlagFallback(x, y, w, h);
+  }
+  ctx.restore();
+}
+
+function drawFlagFallback(x, y, w, h) {
+  ctx.save();
+  ctx.translate(x, y);
+  // black upper section
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, w, h);
+  // red lower section, curved boundary
+  ctx.fillStyle = '#c1272d';
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.55);
+  ctx.quadraticCurveTo(w * 0.5, h * 0.35, w, h * 0.55);
+  ctx.lineTo(w, h); ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fill();
+  // white koru near the hoist
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(1.5, w * 0.05);
+  ctx.beginPath();
+  ctx.arc(w * 0.36, h * 0.48, w * 0.15, 0.2, Math.PI * 1.85);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0, 0, w, h);
+  ctx.restore();
+}
+
+/* =========================================================
+   WAKA — hull with raised prow/stern, three seated paddlers with
+   an animated paddling stroke synced to a shared rhythm
+   ========================================================= */
+function drawWaka(x, y, trimColor, label, now, paddling) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // hull — wood tone, raised stern (left) and taller raised prow (right)
+  ctx.fillStyle = '#6b4226';
+  ctx.beginPath();
+  ctx.moveTo(-38, 10);
+  ctx.quadraticCurveTo(-32, -6, -22, -15);
+  ctx.quadraticCurveTo(0, -7, 20, 3);
+  ctx.quadraticCurveTo(34, -12, 43, -25);
+  ctx.quadraticCurveTo(39, 7, 20, 13);
+  ctx.quadraticCurveTo(-10, 19, -38, 10);
+  ctx.closePath();
+  ctx.fill();
+  // trim stripe along the top edge
+  ctx.strokeStyle = trimColor;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(-30, -4); ctx.quadraticCurveTo(0, -10, 24, 0);
+  ctx.stroke();
+
+  // three seated paddlers, staggered stroke phase for a rowing rhythm
+  const paddlerXs = [-16, 2, 20];
+  paddlerXs.forEach((px, i) => {
+    const phase = paddling ? (now / 260 + i * 1.4) : -0.6;
+    const strokeAngle = paddling ? Math.sin(phase) * 0.6 : -0.3;
+
+    ctx.fillStyle = '#3a2417';
+    ctx.beginPath(); ctx.ellipse(px, -2, 6, 8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c98a5a';
+    ctx.beginPath(); ctx.arc(px, -10, 4.5, 0, Math.PI * 2); ctx.fill();
+
+    const padX = px + Math.cos(strokeAngle) * 14;
+    const padY = 2 + Math.sin(strokeAngle) * 9;
+    ctx.strokeStyle = '#2a1a10';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(px, -4); ctx.lineTo(padX, padY); ctx.stroke();
+    ctx.fillStyle = '#5a3a20';
+    ctx.save();
+    ctx.translate(padX, padY + 4);
+    ctx.rotate(strokeAngle);
+    ctx.beginPath(); ctx.ellipse(0, 0, 3, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, -5, -30);
+  ctx.restore();
+}
+
+/* =========================================================
+   END OF RACE
+   ========================================================= */
+function endRace(won) {
+  state.running = false;
+  const acc = state.attempts > 0 ? Math.round((state.correctCount / state.attempts) * 100) : 0;
+  if (state.stakes === 'infinite') {
+    document.getElementById('resultsTitle').textContent = '🛶 Practice Complete';
+    document.getElementById('resultsMessage').textContent = `You answered ${state.correctCount} correctly out of ${state.attempts}.`;
+    playSound('win');
+  } else if (won) {
+    document.getElementById('resultsTitle').textContent = '🏆 You Won the Race!';
+    document.getElementById('resultsMessage').textContent = 'Your waka crossed the line first!';
+    playSound('win');
+  } else {
+    document.getElementById('resultsTitle').textContent = '🛶 The Rival Won';
+    document.getElementById('resultsMessage').textContent = 'Their waka got there first — try again!';
+    playSound('lose');
+  }
+  document.getElementById('resultsAccuracy').textContent = `${acc}%`;
+  showScreen('resultsScreen');
+}
+</script>
+</body>
+</html>
